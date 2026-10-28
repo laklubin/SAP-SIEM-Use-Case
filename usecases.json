@@ -1,0 +1,2205 @@
+[
+ {
+  "id": "SAP-UC-001",
+  "name": "Brute-force logon attempts against SAP dialog users",
+  "description": "Repeated failed SAP GUI logons for one or many users from the same terminal, the classic password-guessing pattern. Security Audit Log message AU2 carries a reason code (1 = unknown user / wrong password) that distinguishes guessing from user error.",
+  "domain": "ABAP Application",
+  "categories": [
+   "Credential Access & Logon Abuse",
+   "Discovery & Reconnaissance"
+  ],
+  "severity": "High",
+  "log_sources": [
+   "SAP Security Audit Log (SM20 / RSAU_READ_LOG)"
+  ],
+  "sample_log": "2026-10-27T14:22:31Z host=sapprd01 sid=PRD inst=00 client=100 user=J.DOE msgid=AU2 class=Logon sev=Critical term=10.14.22.87 tcode=SESSION_MANAGER prog=SAPMSSY1 msg=\"Logon failed (reason=1, type=A, client=100, user=J.DOE)\"\n2026-10-27T14:22:33Z host=sapprd01 sid=PRD inst=00 client=100 user=J.DOE msgid=AU2 class=Logon sev=Critical term=10.14.22.87 tcode=SESSION_MANAGER prog=SAPMSSY1 msg=\"Logon failed (reason=1, type=A, client=100, user=J.DOE)\"\n2026-10-27T14:22:36Z host=sapprd01 sid=PRD inst=00 client=100 user=J.DOE msgid=AU2 class=Logon sev=Critical term=10.14.22.87 tcode=SESSION_MANAGER prog=SAPMSSY1 msg=\"Logon failed (reason=1, type=A, client=100, user=J.DOE)\"",
+  "detection": "msgid=AU2 grouped by term/source IP: >= 10 events in 5 min, or >= 5 distinct users from one terminal in 10 min.",
+  "attack": [
+   "T1110 Brute Force",
+   "T1110.003 Password Spraying"
+  ]
+ },
+ {
+  "id": "SAP-UC-002",
+  "name": "User locked by the system after repeated failed logons",
+  "description": "SAP locks a user automatically once login/fails_to_user_lock is exceeded. The lock event is the confirmed outcome of a guessing attack and should be alerted on even when the individual AU2 events were below threshold.",
+  "domain": "ABAP Application",
+  "categories": [
+   "Credential Access & Logon Abuse"
+  ],
+  "severity": "High",
+  "log_sources": [
+   "SAP Security Audit Log (SM20 / RSAU_READ_LOG)"
+  ],
+  "sample_log": "2026-10-27T14:23:02Z host=sapprd01 sid=PRD client=100 user=J.DOE msgid=AUM class=Logon sev=Critical term=10.14.22.87 msg=\"User J.DOE locked in client 100 after too many failed logon attempts\"",
+  "detection": "Alert on every msgid=AUM. Correlate backwards 15 min for the AU2 burst and the source terminal.",
+  "attack": [
+   "T1110 Brute Force"
+  ]
+ },
+ {
+  "id": "SAP-UC-003",
+  "name": "Successful logon immediately after a failed-logon burst",
+  "description": "A successful AU1 for the same user and terminal that just produced a run of AU2 failures is the signature of a brute-force that succeeded. This is the single highest-value authentication correlation in SAP.",
+  "domain": "ABAP Application",
+  "categories": [
+   "Credential Access & Logon Abuse"
+  ],
+  "severity": "Critical",
+  "log_sources": [
+   "SAP Security Audit Log (SM20 / RSAU_READ_LOG)"
+  ],
+  "sample_log": "2026-10-27T14:24:06Z host=sapprd01 sid=PRD client=100 user=J.DOE msgid=AU2 class=Logon sev=Critical term=10.14.22.87 msg=\"Logon failed (reason=1, type=A, client=100, user=J.DOE)\"\n2026-10-27T14:24:19Z host=sapprd01 sid=PRD client=100 user=J.DOE msgid=AU1 class=Logon sev=Non-Critical term=10.14.22.87 tcode=SESSION_MANAGER msg=\"Logon successful (type=A, client=100, user=J.DOE)\"",
+  "detection": "Sequence: >= 5 x AU2 then 1 x AU1 for the same user+terminal within 10 min.",
+  "attack": [
+   "T1110 Brute Force",
+   "T1078 Valid Accounts"
+  ]
+ },
+ {
+  "id": "SAP-UC-004",
+  "name": "Logon with SAP standard or default account (SAP*, DDIC, EARLYWATCH)",
+  "description": "SAP ships well-known accounts with documented default passwords. Any interactive logon by SAP*, DDIC or EARLYWATCH in production is either an unmanaged emergency action or an attacker using a default credential.",
+  "domain": "ABAP Application",
+  "categories": [
+   "Credential Access & Logon Abuse",
+   "Privilege Escalation & Authorization Abuse"
+  ],
+  "severity": "Critical",
+  "log_sources": [
+   "SAP Security Audit Log (SM20 / RSAU_READ_LOG)"
+  ],
+  "sample_log": "2026-10-27T02:14:55Z host=sapprd01 sid=PRD client=000 user=SAP* msgid=AU1 class=Logon sev=Non-Critical term=203.0.113.45 tcode=SESSION_MANAGER msg=\"Logon successful (type=A, client=000, user=SAP*)\"",
+  "detection": "msgid in (AU1,AU5) AND user in (SAP*,DDIC,EARLYWATCH,SAPCPIC,TMSADM) AND system is production.",
+  "attack": [
+   "T1078.001 Default Accounts",
+   "T1078 Valid Accounts"
+  ]
+ },
+ {
+  "id": "SAP-UC-005",
+  "name": "Interactive dialog logon by a technical or service account",
+  "description": "Accounts typed SYSTEM / COMMUNICATION / SERVICE (RFC users, TMSADM, SAPCPIC, interface users) should never produce a type=A dialog logon. A dialog logon means the credential has been lifted out of its interface and is being driven by a human.",
+  "domain": "ABAP Application",
+  "categories": [
+   "Credential Access & Logon Abuse",
+   "Privilege Escalation & Authorization Abuse"
+  ],
+  "severity": "Critical",
+  "log_sources": [
+   "SAP Security Audit Log (SM20 / RSAU_READ_LOG)"
+  ],
+  "sample_log": "2026-10-27T21:48:02Z host=sapprd01 sid=PRD client=100 user=RFC_MIDDLEWARE msgid=AU1 class=Logon sev=Non-Critical term=10.14.55.12 tcode=SESSION_MANAGER prog=SAPMSSY1 msg=\"Logon successful (type=A, client=100, user=RFC_MIDDLEWARE)\"",
+  "detection": "msgid=AU1 AND type=A AND user IN (asset list of SYSTEM/COMMUNICATION/SERVICE users from USR02.USTYP).",
+  "attack": [
+   "T1078 Valid Accounts",
+   "T1550 Use Alternate Authentication Material"
+  ]
+ },
+ {
+  "id": "SAP-UC-006",
+  "name": "Logon from an unexpected country or untrusted network range",
+  "description": "SAP dialog and Fiori access normally originates from known corporate ranges and jump hosts. A successful logon sourced from a hosting provider, VPN exit or unexpected country indicates credential theft.",
+  "domain": "ABAP Application",
+  "categories": [
+   "Credential Access & Logon Abuse"
+  ],
+  "severity": "High",
+  "log_sources": [
+   "SAP Security Audit Log (SM20 / RSAU_READ_LOG)",
+   "SAP ICM / Web Dispatcher Access Log"
+  ],
+  "sample_log": "2026-10-27T03:02:41Z host=sapprd01 sid=PRD client=100 user=F.MUELLER msgid=AU1 class=Logon sev=Non-Critical term=203.0.113.45 tcode=SESSION_MANAGER msg=\"Logon successful (type=A, client=100, user=F.MUELLER)\"",
+  "detection": "Enrich terminal/source IP with geo + ASN. Alert when country not in allow-list, or ASN is a hosting/VPN provider.",
+  "attack": [
+   "T1078 Valid Accounts"
+  ]
+ },
+ {
+  "id": "SAP-UC-007",
+  "name": "Same user logged on concurrently from multiple terminals",
+  "description": "Two active sessions for one user ID from different source addresses means either account sharing or a stolen credential in parallel use. Both are reportable in an SAP control environment.",
+  "domain": "ABAP Application",
+  "categories": [
+   "Credential Access & Logon Abuse"
+  ],
+  "severity": "Medium",
+  "log_sources": [
+   "SAP Security Audit Log (SM20 / RSAU_READ_LOG)"
+  ],
+  "sample_log": "2026-10-27T09:11:04Z host=sapprd01 sid=PRD client=100 user=A.SCHMIDT msgid=AU1 class=Logon sev=Non-Critical term=10.14.22.19 msg=\"Logon successful (type=A, client=100, user=A.SCHMIDT)\"\n2026-10-27T09:13:52Z host=sapprd02 sid=PRD client=100 user=A.SCHMIDT msgid=AU1 class=Logon sev=Non-Critical term=10.88.4.230 msg=\"Logon successful (type=A, client=100, user=A.SCHMIDT)\"",
+  "detection": "Same user, >= 2 distinct terminals within 15 min, no intervening AUC logoff.",
+  "attack": [
+   "T1078 Valid Accounts"
+  ]
+ },
+ {
+  "id": "SAP-UC-008",
+  "name": "Password reset of a privileged account by an administrator",
+  "description": "An admin resetting another user's password is normal service desk work, but a reset of a SAP_ALL holder, a basis admin or a firefighter ID is a takeover primitive and must be reconciled against a ticket.",
+  "domain": "ABAP Application",
+  "categories": [
+   "Credential Access & Logon Abuse",
+   "User & Role Administration"
+  ],
+  "severity": "High",
+  "log_sources": [
+   "SAP Security Audit Log (SM20 / RSAU_READ_LOG)",
+   "SAP Change Documents (CDHDR / CDPOS)"
+  ],
+  "sample_log": "2026-10-27T16:40:12Z host=sapprd01 sid=PRD client=100 user=BASIS_OP1 msgid=AUD class=User Master sev=Critical term=10.14.9.7 tcode=SU01 msg=\"User master record BASIS_ADMIN changed (password reset, productive password set)\"",
+  "detection": "msgid=AUD with password attribute changed AND target user in privileged-account watchlist AND no matching change ticket.",
+  "attack": [
+   "T1098 Account Manipulation",
+   "T1556 Modify Authentication Process"
+  ]
+ },
+ {
+  "id": "SAP-UC-009",
+  "name": "Burst of failed RFC / CPIC logons",
+  "description": "AU6 records failed non-dialog logons. A burst means something is replaying stale or guessed interface credentials, often a scanner enumerating RFC destinations or a decommissioned interface still pointed at production.",
+  "domain": "ABAP Application",
+  "categories": [
+   "Credential Access & Logon Abuse",
+   "RFC / Interface Abuse"
+  ],
+  "severity": "High",
+  "log_sources": [
+   "SAP Security Audit Log (SM20 / RSAU_READ_LOG)"
+  ],
+  "sample_log": "2026-10-27T11:07:18Z host=sapprd01 sid=PRD client=100 user=RFC_SCAN msgid=AU6 class=RFC Logon sev=Critical term=203.0.113.77 msg=\"RFC/CPIC logon failed, reason=1, type=F, client=100, user=RFC_SCAN\"\n2026-10-27T11:07:19Z host=sapprd01 sid=PRD client=100 user=RFC_TEST msgid=AU6 class=RFC Logon sev=Critical term=203.0.113.77 msg=\"RFC/CPIC logon failed, reason=1, type=F, client=100, user=RFC_TEST\"",
+  "detection": "msgid=AU6: >= 10 in 5 min from one terminal, or >= 5 distinct users from one terminal.",
+  "attack": [
+   "T1110 Brute Force",
+   "T1021 Remote Services"
+  ]
+ },
+ {
+  "id": "SAP-UC-010",
+  "name": "Unlock of a locked user followed by immediate logon",
+  "description": "An attacker with user-administration rights can unlock a dormant or locked account, use it, and re-lock it. The AUA unlock followed quickly by AU1 and privileged activity is the tell.",
+  "domain": "ABAP Application",
+  "categories": [
+   "Credential Access & Logon Abuse",
+   "User & Role Administration"
+  ],
+  "severity": "High",
+  "log_sources": [
+   "SAP Security Audit Log (SM20 / RSAU_READ_LOG)"
+  ],
+  "sample_log": "2026-10-27T22:05:33Z host=sapprd01 sid=PRD client=100 user=BASIS_OP1 msgid=AUA class=User Master sev=Critical tcode=SU01 msg=\"User DORMANT_FI01 unlocked in client 100\"\n2026-10-27T22:06:47Z host=sapprd01 sid=PRD client=100 user=DORMANT_FI01 msgid=AU1 class=Logon sev=Non-Critical term=10.14.22.87 msg=\"Logon successful (type=A, client=100, user=DORMANT_FI01)\"",
+  "detection": "msgid=AUA then AU1 for the unlocked user within 60 min, especially outside business hours.",
+  "attack": [
+   "T1098 Account Manipulation",
+   "T1078 Valid Accounts"
+  ]
+ },
+ {
+  "id": "SAP-UC-011",
+  "name": "Logon by an account dormant for more than 90 days",
+  "description": "Dormant accounts are the preferred landing point for an attacker because nobody is watching them. Reactivation after a long silence, especially with privileged roles attached, warrants verification with the owner.",
+  "domain": "ABAP Application",
+  "categories": [
+   "Credential Access & Logon Abuse"
+  ],
+  "severity": "Medium",
+  "log_sources": [
+   "SAP Security Audit Log (SM20 / RSAU_READ_LOG)"
+  ],
+  "sample_log": "2026-10-27T13:30:08Z host=sapprd01 sid=PRD client=100 user=T.BECKER msgid=AU1 class=Logon sev=Non-Critical term=10.14.31.66 msg=\"Logon successful (type=A, client=100, user=T.BECKER)\"  # last_logon_before=2026-06-14",
+  "detection": "Join AU1 against USR02.TRDAT (last logon) or a SIEM-side first-seen baseline; alert when gap > 90 days.",
+  "attack": [
+   "T1078 Valid Accounts"
+  ]
+ },
+ {
+  "id": "SAP-UC-012",
+  "name": "Assignment of SAP_ALL or SAP_NEW profile",
+  "description": "SAP_ALL grants every authorization in the system. Its assignment in production is the single most consequential authorization event in an SAP landscape and is almost never legitimate outside a controlled emergency process.",
+  "domain": "ABAP Application",
+  "categories": [
+   "Privilege Escalation & Authorization Abuse",
+   "User & Role Administration"
+  ],
+  "severity": "Critical",
+  "log_sources": [
+   "SAP Security Audit Log (SM20 / RSAU_READ_LOG)",
+   "SAP Change Documents (CDHDR / CDPOS)"
+  ],
+  "sample_log": "2026-10-27T17:12:44Z host=sapprd01 sid=PRD client=100 user=BASIS_OP1 msgid=AUB class=User Master sev=Critical tcode=SU01 msg=\"Authorizations for user J.DOE changed (profile SAP_ALL added)\"",
+  "detection": "msgid=AUB OR CDHDR objectclass=IDENTITY where added profile in (SAP_ALL, SAP_NEW, SAP_ALL_DISPLAY exempt).",
+  "attack": [
+   "T1098 Account Manipulation",
+   "T1548 Abuse Elevation Control Mechanism"
+  ]
+ },
+ {
+  "id": "SAP-UC-013",
+  "name": "Grant of a critical authorization object (S_DEVELOP, S_TABU_DIS, S_RZL_ADM, S_ADMI_FCD)",
+  "description": "A handful of authorization objects effectively confer system control: code change, direct table maintenance, OS-level administration and system administration functions. Changes to them are higher-signal than role names, which can be renamed.",
+  "domain": "ABAP Application",
+  "categories": [
+   "Privilege Escalation & Authorization Abuse"
+  ],
+  "severity": "Critical",
+  "log_sources": [
+   "SAP Security Audit Log (SM20 / RSAU_READ_LOG)",
+   "SAP Change Documents (CDHDR / CDPOS)"
+  ],
+  "sample_log": "2026-10-27T17:25:09Z host=sapprd01 sid=PRD client=100 user=SEC_ADMIN msgid=AUB class=User Master sev=Critical tcode=PFCG msg=\"Authorizations for user C.WEBER changed (role Z_FI_POWER: S_DEVELOP ACTVT=02, OBJTYPE=PROG added)\"",
+  "detection": "Parse role/profile change documents for the critical-object list; alert on add or on ACTVT widening to 01/02/06/07.",
+  "attack": [
+   "T1098 Account Manipulation",
+   "T1068 Exploitation for Privilege Escalation"
+  ]
+ },
+ {
+  "id": "SAP-UC-014",
+  "name": "User grants a role or profile to their own account",
+  "description": "Self-assignment defeats four-eyes control entirely. Comparing the acting user in the audit record against the target user is a cheap, near-zero-false-positive detection.",
+  "domain": "ABAP Application",
+  "categories": [
+   "Privilege Escalation & Authorization Abuse",
+   "User & Role Administration",
+   "Fraud & Segregation of Duties"
+  ],
+  "severity": "Critical",
+  "log_sources": [
+   "SAP Security Audit Log (SM20 / RSAU_READ_LOG)",
+   "SAP Change Documents (CDHDR / CDPOS)"
+  ],
+  "sample_log": "2026-10-27T18:02:51Z host=sapprd01 sid=PRD client=100 user=C.WEBER msgid=AUB class=User Master sev=Critical tcode=SU01 msg=\"Authorizations for user C.WEBER changed (role Z_FI_PAYMENT_RELEASE added)\"",
+  "detection": "msgid in (AUB,AUD,AUR) AND acting_user = target_user.",
+  "attack": [
+   "T1098 Account Manipulation",
+   "T1548 Abuse Elevation Control Mechanism"
+  ]
+ },
+ {
+  "id": "SAP-UC-015",
+  "name": "Spike in authorization check failures (authorization probing)",
+  "description": "A user systematically trying transactions or functions they are not entitled to produces a wall of AU4 / AUL failures. This is SAP's equivalent of permission enumeration and often precedes a successful privilege find.",
+  "domain": "ABAP Application",
+  "categories": [
+   "Privilege Escalation & Authorization Abuse",
+   "Discovery & Reconnaissance"
+  ],
+  "severity": "Medium",
+  "log_sources": [
+   "SAP Security Audit Log (SM20 / RSAU_READ_LOG)"
+  ],
+  "sample_log": "2026-10-27T10:44:02Z host=sapprd01 sid=PRD client=100 user=J.DOE msgid=AU4 class=Transaction sev=Severe tcode=SE16 msg=\"Start of transaction SE16 failed (reason=2: missing authorization)\"\n2026-10-27T10:44:11Z host=sapprd01 sid=PRD client=100 user=J.DOE msgid=AU4 class=Transaction sev=Severe tcode=SM49 msg=\"Start of transaction SM49 failed (reason=2: missing authorization)\"\n2026-10-27T10:44:24Z host=sapprd01 sid=PRD client=100 user=J.DOE msgid=AU4 class=Transaction sev=Severe tcode=RZ10 msg=\"Start of transaction RZ10 failed (reason=2: missing authorization)\"",
+  "detection": "msgid in (AU4,AUL) grouped by user: >= 15 failures across >= 8 distinct tcodes/function modules in 30 min.",
+  "attack": [
+   "T1069 Permission Groups Discovery",
+   "T1087 Account Discovery"
+  ]
+ },
+ {
+  "id": "SAP-UC-016",
+  "name": "Role maintenance performed directly in production (PFCG)",
+  "description": "Roles should be built in development and transported. PFCG authorization-data changes made straight in production bypass the change process and leave no transport record to review.",
+  "domain": "ABAP Application",
+  "categories": [
+   "Privilege Escalation & Authorization Abuse",
+   "Transport & Change Management"
+  ],
+  "severity": "High",
+  "log_sources": [
+   "SAP Security Audit Log (SM20 / RSAU_READ_LOG)",
+   "SAP Change Documents (CDHDR / CDPOS)"
+  ],
+  "sample_log": "2026-10-27T18:40:17Z host=sapprd01 sid=PRD client=100 user=SEC_ADMIN msgid=AU3 class=Transaction sev=Severe tcode=PFCG msg=\"Transaction PFCG started\"\n2026-10-27T18:43:55Z host=sapprd01 sid=PRD client=100 user=SEC_ADMIN msgid=AUR class=User Master sev=Critical tcode=PFCG msg=\"Role Z_MM_PURCHASING changed and generated in client 100\"",
+  "detection": "tcode in (PFCG,SU02,SUPC,SU24) on a production SID, where system change option is not open for that namespace.",
+  "attack": [
+   "T1098 Account Manipulation",
+   "T1484 Domain or Tenant Policy Modification"
+  ]
+ },
+ {
+  "id": "SAP-UC-017",
+  "name": "Emergency / firefighter access used outside an approved window",
+  "description": "GRC Emergency Access Management issues temporary elevated IDs. Sessions opened without a valid request, or extending past the approved window, are elevated access with no accountability.",
+  "domain": "ABAP Application",
+  "categories": [
+   "Privilege Escalation & Authorization Abuse"
+  ],
+  "severity": "High",
+  "log_sources": [
+   "SAP GRC Access Control (EAM Firefighter Log)",
+   "SAP Security Audit Log (SM20 / RSAU_READ_LOG)"
+  ],
+  "sample_log": "2026-10-27T23:14:02Z system=GRC_PRD ff_id=FF_FI_01 owner=A.SCHMIDT controller=M.KLEIN reason_code=INCIDENT request=none valid_to=2026-10-27T20:00:00Z action=LOGON target_sid=PRD client=100 status=GRANTED",
+  "detection": "EAM session start with reason_code empty/none, or session timestamp outside request valid_from..valid_to.",
+  "attack": [
+   "T1078 Valid Accounts",
+   "T1548 Abuse Elevation Control Mechanism"
+  ]
+ },
+ {
+  "id": "SAP-UC-018",
+  "name": "Authorization profile generated or activated outside role maintenance (SU02 / SUPC)",
+  "description": "Hand-built profiles in SU02 sidestep PFCG's role documentation and the usual review path. Their generation in production is a deliberate attempt to grant authorizations invisibly.",
+  "domain": "ABAP Application",
+  "categories": [
+   "Privilege Escalation & Authorization Abuse"
+  ],
+  "severity": "High",
+  "log_sources": [
+   "SAP Security Audit Log (SM20 / RSAU_READ_LOG)"
+  ],
+  "sample_log": "2026-10-27T19:02:33Z host=sapprd01 sid=PRD client=100 user=SEC_ADMIN msgid=AU3 class=Transaction sev=Severe tcode=SU02 msg=\"Transaction SU02 started\"\n2026-10-27T19:05:48Z host=sapprd01 sid=PRD client=100 user=SEC_ADMIN msgid=AUR class=User Master sev=Critical tcode=SU02 msg=\"Profile Z_MANUAL_ADM created in client 100\"",
+  "detection": "tcode in (SU02,SUPC) in production, or manual profile creation events with no originating transport.",
+  "attack": [
+   "T1098 Account Manipulation"
+  ]
+ },
+ {
+  "id": "SAP-UC-019",
+  "name": "Reference user assigned to inherit privileges indirectly",
+  "description": "A reference user attached in SU01 (Roles tab / logon data) silently inherits that user's authorizations. It is a well-known way to grant power without touching the target user's own role assignments.",
+  "domain": "ABAP Application",
+  "categories": [
+   "Privilege Escalation & Authorization Abuse",
+   "User & Role Administration"
+  ],
+  "severity": "High",
+  "log_sources": [
+   "SAP Security Audit Log (SM20 / RSAU_READ_LOG)",
+   "SAP Change Documents (CDHDR / CDPOS)"
+  ],
+  "sample_log": "2026-10-27T19:30:06Z host=sapprd01 sid=PRD client=100 user=BASIS_OP1 msgid=AUD class=User Master sev=Critical tcode=SU01 msg=\"User master record J.DOE changed (reference user set to REF_SUPERUSER)\"",
+  "detection": "CDPOS on USREFUS / reference-user field change, or AUD records where reference user is non-blank.",
+  "attack": [
+   "T1098 Account Manipulation",
+   "T1548 Abuse Elevation Control Mechanism"
+  ]
+ },
+ {
+  "id": "SAP-UC-020",
+  "name": "Central User Administration distribution model or field attributes changed",
+  "description": "SCUA / SCUM define which system is authoritative for user data. Flipping a field from Global to Local lets an attacker make local changes in production that central administration will no longer overwrite or report.",
+  "domain": "ABAP Application",
+  "categories": [
+   "Privilege Escalation & Authorization Abuse",
+   "Audit & Log Tampering"
+  ],
+  "severity": "High",
+  "log_sources": [
+   "SAP Security Audit Log (SM20 / RSAU_READ_LOG)",
+   "SAP Table Change Logs (DBTABLOG)"
+  ],
+  "sample_log": "2026-10-27T19:55:21Z host=sapprd01 sid=PRD client=100 user=BASIS_OP1 msgid=AU3 class=Transaction sev=Severe tcode=SCUM msg=\"Transaction SCUM started\"\n2026-10-27T19:57:40Z tabname=USCUSTSYS key=PRDCLNT100 field=ROLE_DIST value_old=GLOBAL value_new=LOCAL user=BASIS_OP1 tcode=SCUM chngind=U",
+  "detection": "tcode in (SCUA,SCUM,SCUG) in production, or DBTABLOG changes on USCUSTSYS / USZBVLNDSC.",
+  "attack": [
+   "T1484 Domain or Tenant Policy Modification",
+   "T1562 Impair Defenses"
+  ]
+ },
+ {
+  "id": "SAP-UC-021",
+  "name": "New user created directly in a production client",
+  "description": "Production user creation should flow from an identity process or CUA. A locally created user, especially one created outside business hours, is a persistence mechanism.",
+  "domain": "ABAP Application",
+  "categories": [
+   "User & Role Administration"
+  ],
+  "severity": "High",
+  "log_sources": [
+   "SAP Security Audit Log (SM20 / RSAU_READ_LOG)",
+   "SAP Change Documents (CDHDR / CDPOS)"
+  ],
+  "sample_log": "2026-10-27T23:41:19Z host=sapprd01 sid=PRD client=100 user=BASIS_OP1 msgid=AU7 class=User Master sev=Critical tcode=SU01 msg=\"User SUPPORT_TMP created in client 100\"",
+  "detection": "msgid=AU7 in production with no matching IdM/CUA provisioning record, or created outside 07:00-19:00 local.",
+  "attack": [
+   "T1136 Create Account",
+   "T1078 Valid Accounts"
+  ]
+ },
+ {
+  "id": "SAP-UC-022",
+  "name": "User created and deleted within a short window (hit-and-run account)",
+  "description": "Creating an account, using it, then deleting it is a deliberate attempt to destroy the subject of the audit trail. The AU7 / AU8 pair for the same user ID inside hours is unambiguous.",
+  "domain": "ABAP Application",
+  "categories": [
+   "User & Role Administration",
+   "Audit & Log Tampering"
+  ],
+  "severity": "Critical",
+  "log_sources": [
+   "SAP Security Audit Log (SM20 / RSAU_READ_LOG)"
+  ],
+  "sample_log": "2026-10-27T23:41:19Z host=sapprd01 sid=PRD client=100 user=BASIS_OP1 msgid=AU7 class=User Master sev=Critical tcode=SU01 msg=\"User SUPPORT_TMP created in client 100\"\n2026-10-28T01:58:44Z host=sapprd01 sid=PRD client=100 user=BASIS_OP1 msgid=AU8 class=User Master sev=Critical tcode=SU01 msg=\"User SUPPORT_TMP deleted in client 100\"",
+  "detection": "msgid=AU7 followed by AU8 for the same target user within 24 h.",
+  "attack": [
+   "T1136 Create Account",
+   "T1070 Indicator Removal"
+  ]
+ },
+ {
+  "id": "SAP-UC-023",
+  "name": "Mass user creation or mass role assignment",
+  "description": "Bulk identity changes (SU10, eCATT, a custom BAPI loop) in a short window either indicate an unreviewed migration or an attacker seeding many footholds at once.",
+  "domain": "ABAP Application",
+  "categories": [
+   "User & Role Administration"
+  ],
+  "severity": "Medium",
+  "log_sources": [
+   "SAP Security Audit Log (SM20 / RSAU_READ_LOG)"
+  ],
+  "sample_log": "2026-10-28T02:10:01Z host=sapprd01 sid=PRD client=100 user=BASIS_OP1 msgid=AU3 class=Transaction sev=Severe tcode=SU10 msg=\"Transaction SU10 started\"\n2026-10-28T02:10:44Z host=sapprd01 sid=PRD client=100 user=BASIS_OP1 msgid=AUB class=User Master sev=Critical tcode=SU10 msg=\"Authorizations for user WH_OP_041 changed (role Z_WM_ALL added)\"   # +37 identical events in 90s",
+  "detection": "count(distinct target_user) by acting user for msgid in (AU7,AUB,AUD) > 20 in 15 min.",
+  "attack": [
+   "T1136 Create Account",
+   "T1098 Account Manipulation"
+  ]
+ },
+ {
+  "id": "SAP-UC-024",
+  "name": "User validity period extended or account type changed",
+  "description": "Pushing out a leaver's validity date, or converting a SERVICE user to DIALOG, quietly re-opens access that governance believes is closed.",
+  "domain": "ABAP Application",
+  "categories": [
+   "User & Role Administration",
+   "Privilege Escalation & Authorization Abuse"
+  ],
+  "severity": "High",
+  "log_sources": [
+   "SAP Security Audit Log (SM20 / RSAU_READ_LOG)",
+   "SAP Change Documents (CDHDR / CDPOS)"
+  ],
+  "sample_log": "2026-10-28T09:14:52Z objectclass=IDENTITY objectid=J.LEAVER changenr=0000871231 username=BASIS_OP1 udate=2026-10-28 utime=09:14:52 tcode=SU01 tabname=USR02 fname=GLTGB value_old=20261031 value_new=20271231 chngind=U",
+  "detection": "CDPOS on USR02 fields GLTGB / GLTGV / USTYP; alert on extension > 30 days or USTYP change into A (dialog).",
+  "attack": [
+   "T1098 Account Manipulation"
+  ]
+ },
+ {
+  "id": "SAP-UC-025",
+  "name": "User master record change by an account without HR or IdM provenance",
+  "description": "User administration carried out by a basis or functional account that is not the designated provisioning identity is off-process by definition and the most common finding in SAP identity audits.",
+  "domain": "ABAP Application",
+  "categories": [
+   "User & Role Administration"
+  ],
+  "severity": "Medium",
+  "log_sources": [
+   "SAP Security Audit Log (SM20 / RSAU_READ_LOG)"
+  ],
+  "sample_log": "2026-10-28T09:40:03Z host=sapprd01 sid=PRD client=100 user=MM_SUPPORT msgid=AUD class=User Master sev=Critical tcode=SU01 msg=\"User master record K.VOGEL changed (logon data, roles)\"",
+  "detection": "msgid in (AU7,AU8,AU9,AUA,AUB,AUD) AND acting_user NOT IN approved provisioning accounts.",
+  "attack": [
+   "T1098 Account Manipulation"
+  ]
+ },
+ {
+  "id": "SAP-UC-026",
+  "name": "Execution of a critical basis transaction in production",
+  "description": "A defined list of transactions gives system-level control: SM49/SM69 (OS commands), SM59 (RFC destinations), RZ10/RZ11 (parameters), SE06/SCC4 (change options), SM30/SE16 (table maintenance). Their start in production is always worth a record.",
+  "domain": "ABAP Application",
+  "categories": [
+   "Critical Transaction & Program Execution"
+  ],
+  "severity": "High",
+  "log_sources": [
+   "SAP Security Audit Log (SM20 / RSAU_READ_LOG)"
+  ],
+  "sample_log": "2026-10-28T10:05:11Z host=sapprd01 sid=PRD client=100 user=J.DOE msgid=AU3 class=Transaction sev=Severe term=10.14.22.87 tcode=SM49 prog=SAPMSSY1 msg=\"Transaction SM49 started\"",
+  "detection": "msgid=AU3 AND tcode IN critical-transaction watchlist AND sid in production; suppress for approved basis accounts on change windows.",
+  "attack": [
+   "T1059 Command and Scripting Interpreter",
+   "T1078 Valid Accounts"
+  ]
+ },
+ {
+  "id": "SAP-UC-027",
+  "name": "External operating system command executed from SAP (SM49 / SM69)",
+  "description": "SM69 defines external commands and SM49 runs them, under the identity of the SAP service account on the host. This is a direct path from an application-layer privilege to arbitrary OS execution.",
+  "domain": "ABAP Application",
+  "categories": [
+   "Critical Transaction & Program Execution",
+   "Debugging & Code Injection"
+  ],
+  "severity": "Critical",
+  "log_sources": [
+   "SAP Security Audit Log (SM20 / RSAU_READ_LOG)",
+   "SAP System Log (SM21)",
+   "OS / Host Logs (syslog, auditd, Windows Event Log)"
+  ],
+  "sample_log": "2026-10-28T10:07:38Z host=sapprd01 sid=PRD client=100 user=J.DOE msgid=AU3 class=Transaction sev=Severe tcode=SM49 msg=\"Transaction SM49 started\"\n2026-10-28T10:08:02Z host=sapprd01 sid=PRD user=J.DOE prog=SAPLSXPT fm=SXPG_COMMAND_EXECUTE command=ZCMD_SHELL opsystem=Linux param=\"-c 'cat /sapmnt/PRD/global/security/rsecssfs/data/SSFS_PRD.DAT'\" rc=0",
+  "detection": "tcode in (SM49,SM69) or FM SXPG_COMMAND_EXECUTE / RFC_START_PROGRAM; join to host auditd exec events by sidadm.",
+  "attack": [
+   "T1059 Command and Scripting Interpreter",
+   "T1552.001 Credentials In Files"
+  ]
+ },
+ {
+  "id": "SAP-UC-028",
+  "name": "Custom report executed directly via SE38 / SA38",
+  "description": "Running a Z-report straight from the editor bypasses the transaction-level authorization checks that normally wrap it. Combined with a report created the same day, this is code being run outside any control.",
+  "domain": "ABAP Application",
+  "categories": [
+   "Critical Transaction & Program Execution",
+   "Debugging & Code Injection"
+  ],
+  "severity": "High",
+  "log_sources": [
+   "SAP Security Audit Log (SM20 / RSAU_READ_LOG)"
+  ],
+  "sample_log": "2026-10-28T10:22:14Z host=sapprd01 sid=PRD client=100 user=C.WEBER msgid=AU3 class=Transaction sev=Severe tcode=SA38 msg=\"Transaction SA38 started\"\n2026-10-28T10:22:51Z host=sapprd01 sid=PRD client=100 user=C.WEBER msgid=AUW class=Transaction sev=Severe tcode=SA38 prog=Z_EXPORT_VENDOR_BANK msg=\"Report Z_EXPORT_VENDOR_BANK started\"",
+  "detection": "msgid=AUW where prog starts with Y/Z and tcode in (SE38,SA38,SE80); escalate if program created < 7 days ago (TRDIR.CDAT).",
+  "attack": [
+   "T1059 Command and Scripting Interpreter"
+  ]
+ },
+ {
+  "id": "SAP-UC-029",
+  "name": "Background job created or modified to run under a privileged user",
+  "description": "A job step's execution user is independent of who scheduled it. Scheduling a step as DDIC or a SAP_ALL holder turns the batch scheduler into a privilege escalation and persistence mechanism.",
+  "domain": "ABAP Application",
+  "categories": [
+   "Critical Transaction & Program Execution",
+   "Privilege Escalation & Authorization Abuse"
+  ],
+  "severity": "Critical",
+  "log_sources": [
+   "SAP Security Audit Log (SM20 / RSAU_READ_LOG)",
+   "SAP Job Logs (TBTCO / TBTCP, SM37)"
+  ],
+  "sample_log": "2026-10-28T10:45:09Z sid=PRD client=100 jobname=ZJOB_NIGHTLY_EXPORT jobcount=10451200 created_by=C.WEBER step=1 program=Z_EXPORT_VENDOR_BANK authcknam=DDIC strtdt=2026-10-29 strtlm=02:00:00 status=released",
+  "detection": "TBTCP.AUTHCKNAM (step user) != TBTCO.SDLUNAME (scheduler) AND step user is privileged.",
+  "attack": [
+   "T1053 Scheduled Task/Job",
+   "T1078 Valid Accounts"
+  ]
+ },
+ {
+  "id": "SAP-UC-030",
+  "name": "Existing background job reassigned to a different execution user",
+  "description": "Repointing a trusted, long-standing job at a new program or user ID lets an attacker inherit the job's schedule and its privileges without creating anything new to notice.",
+  "domain": "ABAP Application",
+  "categories": [
+   "Critical Transaction & Program Execution",
+   "Privilege Escalation & Authorization Abuse"
+  ],
+  "severity": "High",
+  "log_sources": [
+   "SAP Job Logs (TBTCO / TBTCP, SM37)",
+   "SAP Change Documents (CDHDR / CDPOS)"
+  ],
+  "sample_log": "2026-10-28T11:02:33Z sid=PRD client=100 jobname=SAP_REORG_SPOOL jobcount=09881004 changed_by=J.DOE field=AUTHCKNAM value_old=SAPSYS value_new=FI_POWER01 field2=PROGRAM value_old=RSPO1041 value_new=Z_FI_PAYRUN_SILENT",
+  "detection": "Change to TBTCP program or AUTHCKNAM on a job not created by the changing user.",
+  "attack": [
+   "T1053 Scheduled Task/Job",
+   "T1036 Masquerading"
+  ]
+ },
+ {
+  "id": "SAP-UC-031",
+  "name": "Client settings opened for changes (SCC4)",
+  "description": "SCC4 controls whether customizing and repository objects can be changed in a client and whether cross-client changes are permitted. Opening a production client removes the technical barrier behind nearly every other change control.",
+  "domain": "ABAP Application",
+  "categories": [
+   "Configuration & Hardening Drift",
+   "Transport & Change Management"
+  ],
+  "severity": "Critical",
+  "log_sources": [
+   "SAP Security Audit Log (SM20 / RSAU_READ_LOG)",
+   "SAP Table Change Logs (DBTABLOG)"
+  ],
+  "sample_log": "2026-10-28T11:20:47Z host=sapprd01 sid=PRD client=100 user=BASIS_OP1 msgid=AU3 class=Transaction sev=Severe tcode=SCC4 msg=\"Transaction SCC4 started\"\n2026-10-28T11:22:05Z tabname=T000 key=100 field=CCCORACTIV value_old=2 value_new=1 field2=CCNOCLIIND value_old=3 value_new=1 user=BASIS_OP1 tcode=SCC4 chngind=U",
+  "detection": "DBTABLOG on T000 (CCCORACTIV, CCNOCLIIND, CCCATEGORY) or tcode=SCC4 in production.",
+  "attack": [
+   "T1484 Domain or Tenant Policy Modification",
+   "T1562 Impair Defenses"
+  ]
+ },
+ {
+  "id": "SAP-UC-032",
+  "name": "System change option set to modifiable (SE06 / SE03)",
+  "description": "With the global setting on 'Modifiable', ABAP objects in production can be edited in place. Every code-integrity assumption in the landscape depends on this flag staying closed.",
+  "domain": "ABAP Application",
+  "categories": [
+   "Configuration & Hardening Drift",
+   "Transport & Change Management"
+  ],
+  "severity": "Critical",
+  "log_sources": [
+   "SAP Security Audit Log (SM20 / RSAU_READ_LOG)",
+   "SAP Table Change Logs (DBTABLOG)"
+  ],
+  "sample_log": "2026-10-28T11:35:12Z host=sapprd01 sid=PRD client=100 user=BASIS_OP1 msgid=AU3 class=Transaction sev=Severe tcode=SE06 msg=\"Transaction SE06 started\"\n2026-10-28T11:36:40Z tabname=TADIR_SETTINGS key=GLOBAL field=EDTFLAG value_old=N value_new=X user=BASIS_OP1 tcode=SE06 msg=\"Global setting changed to Modifiable\"",
+  "detection": "tcode in (SE06,SE03) in production, or TCESYST / global-setting change to modifiable.",
+  "attack": [
+   "T1484 Domain or Tenant Policy Modification",
+   "T1195.002 Compromise Software Supply Chain"
+  ]
+ },
+ {
+  "id": "SAP-UC-033",
+  "name": "Profile parameter changed to weaken security (RZ10 / RZ11)",
+  "description": "Parameters such as login/min_password_lng, login/no_automatic_user_sapstar, auth/no_check_in_some_cases and rfc/reject_expired_passwd each remove a specific control. Dynamic changes via RZ11 take effect without a restart and are easy to miss.",
+  "domain": "ABAP Application",
+  "categories": [
+   "Configuration & Hardening Drift",
+   "Audit & Log Tampering"
+  ],
+  "severity": "Critical",
+  "log_sources": [
+   "SAP Security Audit Log (SM20 / RSAU_READ_LOG)",
+   "SAP System Log (SM21)"
+  ],
+  "sample_log": "2026-10-28T11:50:26Z host=sapprd01 sid=PRD user=BASIS_OP1 tcode=RZ11 param=login/no_automatic_user_sapstar value_old=1 value_new=0 scope=dynamic msg=\"Profile parameter changed dynamically\"",
+  "detection": "Baseline a parameter allow-list; alert on any change to the security-relevant set, in either direction.",
+  "attack": [
+   "T1562 Impair Defenses",
+   "T1556 Modify Authentication Process"
+  ]
+ },
+ {
+  "id": "SAP-UC-034",
+  "name": "High-risk ICF service activated (SICF)",
+  "description": "Services such as /sap/bc/soap/rfc, /sap/bc/webdynpro, /sap/bc/gui/sap/its/webgui and /sap/public/* expose SAP function over HTTP. Activating one, especially on an internet-facing system, creates a new remote attack surface.",
+  "domain": "ABAP Application",
+  "categories": [
+   "Configuration & Hardening Drift",
+   "RFC / Interface Abuse"
+  ],
+  "severity": "High",
+  "log_sources": [
+   "SAP Security Audit Log (SM20 / RSAU_READ_LOG)",
+   "SAP ICM / Web Dispatcher Access Log"
+  ],
+  "sample_log": "2026-10-28T12:04:18Z host=sapprd01 sid=PRD client=100 user=BASIS_OP1 msgid=AU3 class=Transaction sev=Severe tcode=SICF msg=\"Transaction SICF started\"\n2026-10-28T12:05:02Z sid=PRD node=/default_host/sap/bc/soap/rfc action=ACTIVATE user=BASIS_OP1 auth=BASIC anon_user=none",
+  "detection": "tcode=SICF plus activation events on the high-risk service list; cross-check for a matching Web Dispatcher / reverse-proxy rule.",
+  "attack": [
+   "T1190 Exploit Public-Facing Application",
+   "T1505 Server Software Component"
+  ]
+ },
+ {
+  "id": "SAP-UC-035",
+  "name": "Debugging with variable replacement in production (debug-and-replace)",
+  "description": "S_DEVELOP with ACTVT 02 lets a user stop a program and overwrite field contents in memory, defeating any in-code authorization or approval check. There is no legitimate use for this in a productive financial system.",
+  "domain": "ABAP Application",
+  "categories": [
+   "Debugging & Code Injection",
+   "Privilege Escalation & Authorization Abuse",
+   "Fraud & Segregation of Duties"
+  ],
+  "severity": "Critical",
+  "log_sources": [
+   "SAP Security Audit Log (SM20 / RSAU_READ_LOG)"
+  ],
+  "sample_log": "2026-10-28T12:30:41Z host=sapprd01 sid=PRD client=100 user=C.WEBER msgid=AU3 class=Transaction sev=Severe tcode=/H prog=SAPMF02K msg=\"Transaction /H (debugging) started\"\n2026-10-28T12:31:16Z host=sapprd01 sid=PRD client=100 user=C.WEBER msgid=AUO class=Other sev=Critical prog=SAPLFK01 msg=\"Field contents changed in debugger (variable LFBK-BANKN)\"",
+  "detection": "Debug events (/H, debug-change audit class) in production, especially with a financial program in the call stack.",
+  "attack": [
+   "T1059 Command and Scripting Interpreter",
+   "T1565 Data Manipulation"
+  ]
+ },
+ {
+  "id": "SAP-UC-036",
+  "name": "ABAP source code changed directly in a production system",
+  "description": "A code change in production with no transport behind it is either an undocumented fix or an implant. SE38/SE80/SE24 edit events plus a TRDIR timestamp with no CTS request is the detection.",
+  "domain": "ABAP Application",
+  "categories": [
+   "Debugging & Code Injection",
+   "Transport & Change Management"
+  ],
+  "severity": "Critical",
+  "log_sources": [
+   "SAP Security Audit Log (SM20 / RSAU_READ_LOG)",
+   "SAP Transport / CTS Logs (STMS, tp, ALOG / SLOG)"
+  ],
+  "sample_log": "2026-10-28T12:48:09Z host=sapprd01 sid=PRD client=100 user=C.WEBER msgid=AU3 class=Transaction sev=Severe tcode=SE38 msg=\"Transaction SE38 started\"\n2026-10-28T12:52:31Z sid=PRD object=PROG objname=Z_FI_PAYMENT_CHECK action=SAVE user=C.WEBER transport=none devclass=ZFI msg=\"Source code modified and activated without transport request\"",
+  "detection": "Repository object change in production where the originating transport is empty or locally created.",
+  "attack": [
+   "T1195.002 Compromise Software Supply Chain",
+   "T1505 Server Software Component"
+  ]
+ },
+ {
+  "id": "SAP-UC-037",
+  "name": "Dynamically generated ABAP code (INSERT REPORT / GENERATE SUBROUTINE POOL)",
+  "description": "Code that writes and runs code at runtime evades static review and transport control entirely. It is the ABAP analogue of an eval() backdoor.",
+  "domain": "ABAP Application",
+  "categories": [
+   "Debugging & Code Injection"
+  ],
+  "severity": "Critical",
+  "log_sources": [
+   "SAP Security Audit Log (SM20 / RSAU_READ_LOG)",
+   "SAP Application Log (SLG1 / BAL)"
+  ],
+  "sample_log": "2026-10-28T13:05:54Z host=sapprd01 sid=PRD client=100 user=RFC_MIDDLEWARE prog=Z_UTIL_RUNNER stmt=\"GENERATE SUBROUTINE POOL\" generated_prog=%_T0A11B msg=\"Dynamic program generated and called at runtime\"",
+  "detection": "Audit for GENERATE SUBROUTINE POOL / INSERT REPORT / dynamic program names (%_T*) in productive execution.",
+  "attack": [
+   "T1059 Command and Scripting Interpreter",
+   "T1027 Obfuscated Files or Information"
+  ]
+ },
+ {
+  "id": "SAP-UC-038",
+  "name": "Native SQL or CALL 'SYSTEM' in custom ABAP code",
+  "description": "EXEC SQL bypasses the ABAP database interface and its client separation; CALL 'SYSTEM' spawns an OS process. Either in a Z-program is both a control gap and a likely injection point.",
+  "domain": "ABAP Application",
+  "categories": [
+   "Debugging & Code Injection",
+   "Direct Data Manipulation"
+  ],
+  "severity": "Critical",
+  "log_sources": [
+   "SAP Security Audit Log (SM20 / RSAU_READ_LOG)",
+   "SAP HANA Audit Trail (AUDIT_LOG)"
+  ],
+  "sample_log": "2026-10-28T13:18:22Z host=sapprd01 sid=PRD client=100 user=C.WEBER prog=Z_DB_DIRECT stmt=\"EXEC SQL: UPDATE SAPPRD.USR02 SET BCODE = ? WHERE BNAME = 'DDIC'\" rc=0",
+  "detection": "Static scan (ATC / CVA) findings for EXEC SQL and CALL 'SYSTEM' in Y/Z objects, joined to runtime execution of those programs.",
+  "attack": [
+   "T1059 Command and Scripting Interpreter",
+   "T1565.001 Stored Data Manipulation"
+  ]
+ },
+ {
+  "id": "SAP-UC-039",
+  "name": "User exit, implicit enhancement or BAdI implementation activated in production",
+  "description": "Enhancement points let code be injected into standard SAP processing without modifying SAP objects. Activating one in production changes business logic in a place reviewers rarely look.",
+  "domain": "ABAP Application",
+  "categories": [
+   "Debugging & Code Injection",
+   "Transport & Change Management"
+  ],
+  "severity": "High",
+  "log_sources": [
+   "SAP Security Audit Log (SM20 / RSAU_READ_LOG)",
+   "SAP Transport / CTS Logs (STMS, tp, ALOG / SLOG)"
+  ],
+  "sample_log": "2026-10-28T13:34:47Z sid=PRD client=100 user=C.WEBER object=ENHO objname=Z_ENH_MIRO_BYPASS enhancement_spot=ES_SAPLMR1M action=ACTIVATE transport=PRDK900412",
+  "detection": "Repository changes where object type in (ENHO,ENHS,SMOD,CMOD) in a productive system.",
+  "attack": [
+   "T1505 Server Software Component",
+   "T1195.002 Compromise Software Supply Chain"
+  ]
+ },
+ {
+  "id": "SAP-UC-040",
+  "name": "Trusted RFC relationship abused to hop into production",
+  "description": "A trusted RFC connection lets a user in the calling system log on to the target without a password. If a low-assurance system (dev, sandbox, solution manager) is trusted by production, compromising the weak system is equivalent to compromising production.",
+  "domain": "Infrastructure & Integration",
+  "categories": [
+   "RFC / Interface Abuse",
+   "Privilege Escalation & Authorization Abuse"
+  ],
+  "severity": "Critical",
+  "log_sources": [
+   "SAP Security Audit Log (SM20 / RSAU_READ_LOG)"
+  ],
+  "sample_log": "2026-10-28T14:02:11Z host=sapprd01 sid=PRD client=100 user=C.WEBER msgid=AU5 class=RFC Logon sev=Non-Critical term=10.60.3.21 trusted_system=DEV trusted_client=100 calling_user=C.WEBER msg=\"RFC/CPIC logon successful (type=T, client=100, user=C.WEBER) via trusted system DEV\"",
+  "detection": "msgid=AU5 with trusted logon type; alert when the calling system is of lower classification than the target.",
+  "attack": [
+   "T1021 Remote Services",
+   "T1078 Valid Accounts",
+   "T1199 Trusted Relationship"
+  ]
+ },
+ {
+  "id": "SAP-UC-041",
+  "name": "Call of a dangerous remote-enabled function module",
+  "description": "RFC_ABAP_INSTALL_AND_RUN compiles and runs arbitrary ABAP; RFC_START_PROGRAM and SXPG_COMMAND_EXECUTE run OS programs; RFC_READ_TABLE reads any table. A successful call of any of them from outside is effectively remote code execution or bulk data access.",
+  "domain": "Infrastructure & Integration",
+  "categories": [
+   "RFC / Interface Abuse",
+   "Critical Transaction & Program Execution"
+  ],
+  "severity": "Critical",
+  "log_sources": [
+   "SAP Security Audit Log (SM20 / RSAU_READ_LOG)",
+   "SAP UCON Logs (UCONCOCKPIT)"
+  ],
+  "sample_log": "2026-10-28T14:15:38Z host=sapprd01 sid=PRD client=100 user=RFC_MIDDLEWARE msgid=AUK class=RFC Call sev=Critical term=203.0.113.45 fugr=SRFC fm=RFC_ABAP_INSTALL_AND_RUN msg=\"Successful RFC call RFC_ABAP_INSTALL_AND_RUN (function group = SRFC)\"",
+  "detection": "msgid=AUK AND fm IN (RFC_ABAP_INSTALL_AND_RUN, RFC_START_PROGRAM, SXPG_COMMAND_EXECUTE, RFC_READ_TABLE, /SDF/GEN_RFC_READ_TABLE, DB_EXECUTE_SQL, TH_GREP).",
+  "attack": [
+   "T1059 Command and Scripting Interpreter",
+   "T1021 Remote Services"
+  ]
+ },
+ {
+  "id": "SAP-UC-042",
+  "name": "Mass table extraction via RFC_READ_TABLE",
+  "description": "RFC_READ_TABLE is the standard way external tools read SAP tables, and the standard way data is bulk-exfiltrated. Volume and the tables requested separate a reporting integration from a harvest.",
+  "domain": "Infrastructure & Integration",
+  "categories": [
+   "RFC / Interface Abuse",
+   "Data Exfiltration"
+  ],
+  "severity": "High",
+  "log_sources": [
+   "SAP Security Audit Log (SM20 / RSAU_READ_LOG)",
+   "SAP UCON Logs (UCONCOCKPIT)"
+  ],
+  "sample_log": "2026-10-28T14:28:02Z host=sapprd01 sid=PRD client=100 user=BI_EXTRACT msgid=AUK class=RFC Call sev=Critical term=10.22.8.90 fugr=SDTX fm=RFC_READ_TABLE query_table=LFBK rowcount=18442 msg=\"Successful RFC call RFC_READ_TABLE (function group = SDTX)\"",
+  "detection": "msgid=AUK AND fm=RFC_READ_TABLE: >= 50 calls in 10 min from one user, or any call where query_table is in the sensitive-table list (USR02, LFBK, KNBK, PA0009, REGUH).",
+  "attack": [
+   "T1213 Data from Information Repositories",
+   "T1048 Exfiltration Over Alternative Protocol"
+  ]
+ },
+ {
+  "id": "SAP-UC-043",
+  "name": "Failed RFC authorization check (interface privilege probing)",
+  "description": "AUL records an RFC call rejected for missing S_RFC authorization. A run of them maps which function groups an interface account can reach, which is reconnaissance against the integration layer.",
+  "domain": "Infrastructure & Integration",
+  "categories": [
+   "RFC / Interface Abuse",
+   "Discovery & Reconnaissance"
+  ],
+  "severity": "Medium",
+  "log_sources": [
+   "SAP Security Audit Log (SM20 / RSAU_READ_LOG)"
+  ],
+  "sample_log": "2026-10-28T14:35:19Z host=sapprd01 sid=PRD client=100 user=RFC_PARTNER msgid=AUL class=RFC Call sev=Critical term=203.0.113.45 fugr=SYST fm=RFC_START_PROGRAM msg=\"Failed RFC call RFC_START_PROGRAM (function group = SYST) - no authorization\"",
+  "detection": "msgid=AUL: >= 10 distinct function groups denied for one user in 15 min.",
+  "attack": [
+   "T1069 Permission Groups Discovery"
+  ]
+ },
+ {
+  "id": "SAP-UC-044",
+  "name": "Gateway registration of an external program denied or newly allowed",
+  "description": "reg_info controls which external programs may register with the SAP gateway. A denial is an attempt to register a rogue RFC server; a sudden success for an unknown TP name means the ACL was relaxed.",
+  "domain": "Infrastructure & Integration",
+  "categories": [
+   "RFC / Interface Abuse",
+   "Configuration & Hardening Drift"
+  ],
+  "severity": "Critical",
+  "log_sources": [
+   "SAP Gateway Log (gw_log / dev_rd)"
+  ],
+  "sample_log": "[Thr 140245881] Wed Oct 28 14:44:12 2026\n[Thr 140245881] *** ERROR => Registration of tp RFCEXEC from host 203.0.113.45 not allowed (reg_info) [gwxxrd.c 2317]\n[Thr 140245881] *** ERROR => GwIRegisterTP: registration of program RFCEXEC denied, client 203.0.113.45:33114",
+  "detection": "Gateway log lines matching 'reg_info' / 'registration ... not allowed', plus any successful registration of a TP not in the approved list.",
+  "attack": [
+   "T1021 Remote Services",
+   "T1133 External Remote Services"
+  ]
+ },
+ {
+  "id": "SAP-UC-045",
+  "name": "Gateway used as a proxy to reach another system (prxy_info)",
+  "description": "The SAP gateway can forward RFC traffic between hosts. Without prxy_info restrictions it becomes a pivot point from a DMZ system into the internal landscape.",
+  "domain": "Infrastructure & Integration",
+  "categories": [
+   "RFC / Interface Abuse"
+  ],
+  "severity": "High",
+  "log_sources": [
+   "SAP Gateway Log (gw_log / dev_rd)"
+  ],
+  "sample_log": "[Thr 140245881] Wed Oct 28 14:51:33 2026\n[Thr 140245881] *** ERROR => Proxy request from host 203.0.113.45 to sapprd03:3300 denied (prxy_info) [gwxxrd.c 4188]",
+  "detection": "Gateway proxy denials, and any allowed proxy hop whose source is not an approved integration host.",
+  "attack": [
+   "T1090 Proxy",
+   "T1021 Remote Services"
+  ]
+ },
+ {
+  "id": "SAP-UC-046",
+  "name": "RFC callback rejected or newly permitted",
+  "description": "In an RFC callback the called system calls back into the caller, running code there under the caller's session. SAP added callback whitelisting (rfc/callback_security_method) precisely because this is an escalation path between systems.",
+  "domain": "Infrastructure & Integration",
+  "categories": [
+   "RFC / Interface Abuse",
+   "Privilege Escalation & Authorization Abuse"
+  ],
+  "severity": "High",
+  "log_sources": [
+   "SAP Gateway Log (gw_log / dev_rd)",
+   "SAP System Log (SM21)"
+  ],
+  "sample_log": "2026-10-28T14:58:07Z host=sapprd01 sid=PRD user=RFC_MIDDLEWARE msg=\"RFC callback rejected: called FM=Z_REMOTE_SYNC, callback FM=RFC_ABAP_INSTALL_AND_RUN, dest=DEVCLNT100, method=3 (reject and log)\"",
+  "detection": "Callback rejection/simulation entries in SM21 and the gateway log; alert on any callback whose target FM is on the dangerous-FM list.",
+  "attack": [
+   "T1021 Remote Services",
+   "T1059 Command and Scripting Interpreter"
+  ]
+ },
+ {
+  "id": "SAP-UC-047",
+  "name": "RFC destination created or changed to point at an untrusted host (SM59)",
+  "description": "An RFC destination stores a target host and often a stored credential. Repointing one, or creating a new one aimed outside the landscape, turns SAP into an outbound channel with saved credentials attached.",
+  "domain": "Infrastructure & Integration",
+  "categories": [
+   "RFC / Interface Abuse",
+   "Data Exfiltration"
+  ],
+  "severity": "Critical",
+  "log_sources": [
+   "SAP Security Audit Log (SM20 / RSAU_READ_LOG)",
+   "SAP Table Change Logs (DBTABLOG)"
+  ],
+  "sample_log": "2026-10-28T15:06:44Z host=sapprd01 sid=PRD client=100 user=BASIS_OP1 msgid=AU3 class=Transaction sev=Severe tcode=SM59 msg=\"Transaction SM59 started\"\n2026-10-28T15:08:12Z tabname=RFCDES key=ZEXFIL_DEST field=RFCOPTIONS value_old= value_new=\"H=203.0.113.45,S=4433,U=RFC_MIDDLEWARE,P=***\" user=BASIS_OP1 tcode=SM59 chngind=I",
+  "detection": "DBTABLOG on RFCDES / RFCATTRIB; alert when the target host is not an internal landscape host, or when a stored password is added.",
+  "attack": [
+   "T1041 Exfiltration Over C2 Channel",
+   "T1552 Unsecured Credentials"
+  ]
+ },
+ {
+  "id": "SAP-UC-048",
+  "name": "SAProuter route request denied to an internal service",
+  "description": "saprouter fronts the landscape for SAP support and partner access. Denied routes to internal dispatcher or gateway ports show someone mapping the landscape through the router.",
+  "domain": "Infrastructure & Integration",
+  "categories": [
+   "RFC / Interface Abuse",
+   "Discovery & Reconnaissance"
+  ],
+  "severity": "Medium",
+  "log_sources": [
+   "SAProuter Log (dev_rout)"
+  ],
+  "sample_log": "Wed Oct 28 15:14:02 2026\nCONNECT FROM host 203.0.113.45 port 51224 TO host sapprd01 service sapdp00 DENIED by saprouttab entry 4\nWed Oct 28 15:14:04 2026\nCONNECT FROM host 203.0.113.45 port 51229 TO host sapprd01 service sapgw00 DENIED by saprouttab entry 4",
+  "detection": "Repeated DENIED route entries from a single source, or any permitted route not present in the reviewed saprouttab baseline.",
+  "attack": [
+   "T1046 Network Service Discovery",
+   "T1133 External Remote Services"
+  ]
+ },
+ {
+  "id": "SAP-UC-049",
+  "name": "Message server external monitoring or administration request",
+  "description": "The message server's external port (ms/server_port_*) should not accept administration. Requests against it are attempts to enumerate the instance list or manipulate logon groups.",
+  "domain": "Infrastructure & Integration",
+  "categories": [
+   "RFC / Interface Abuse",
+   "Discovery & Reconnaissance"
+  ],
+  "severity": "High",
+  "log_sources": [
+   "SAP Message Server Log (dev_ms)"
+  ],
+  "sample_log": "[Thr 140] Wed Oct 28 15:21:40 2026\n[Thr 140] *** ERROR => MsSExtAdmin: external administration request from 203.0.113.45 rejected (ms/admin_port not enabled) [msxxserv.c 9912]",
+  "detection": "Message server log entries for external admin/monitor requests; confirm ms/monitor and ms/admin_port are closed.",
+  "attack": [
+   "T1046 Network Service Discovery"
+  ]
+ },
+ {
+  "id": "SAP-UC-050",
+  "name": "SOAP / HTTP RFC endpoint accessed from an untrusted network",
+  "description": "/sap/bc/soap/rfc exposes RFC over HTTP with basic authentication. Access to it from outside the integration tier, or with a scripted user agent, is a remote function-call attempt against the application server.",
+  "domain": "Infrastructure & Integration",
+  "categories": [
+   "RFC / Interface Abuse",
+   "Discovery & Reconnaissance"
+  ],
+  "severity": "High",
+  "log_sources": [
+   "SAP ICM / Web Dispatcher Access Log"
+  ],
+  "sample_log": "203.0.113.45 - RFC_MIDDLEWARE [28/Oct/2026:15:30:02 +0000] \"POST /sap/bc/soap/rfc?sap-client=100 HTTP/1.1\" 200 4812 \"-\" \"python-requests/2.31.0\"\n203.0.113.45 - RFC_MIDDLEWARE [28/Oct/2026:15:30:03 +0000] \"POST /sap/bc/soap/rfc?sap-client=100 HTTP/1.1\" 200 183244 \"-\" \"python-requests/2.31.0\"",
+  "detection": "ICM access log where path matches /sap/bc/soap/rfc or /sap/bc/srt/* AND source is outside the approved integration subnets, or user agent is a scripting library.",
+  "attack": [
+   "T1190 Exploit Public-Facing Application",
+   "T1071 Application Layer Protocol"
+  ]
+ },
+ {
+  "id": "SAP-UC-051",
+  "name": "UCON blocklist violation: RFC function called outside its approved profile",
+  "description": "Unified Connectivity records which remote-enabled function modules are actually used, then blocks the rest. A UCON violation means a function module outside the agreed interface surface was invoked.",
+  "domain": "Infrastructure & Integration",
+  "categories": [
+   "RFC / Interface Abuse"
+  ],
+  "severity": "High",
+  "log_sources": [
+   "SAP UCON Logs (UCONCOCKPIT)"
+  ],
+  "sample_log": "2026-10-28T15:41:18Z sid=PRD client=100 user=RFC_PARTNER fm=BAPI_USER_CREATE1 phase=active ucon_status=BLOCKED caller_host=203.0.113.45 msg=\"RFC call blocked by UCON default blocklist\"",
+  "detection": "UCON blocked/would-be-blocked entries, grouped by calling user and function module.",
+  "attack": [
+   "T1021 Remote Services"
+  ]
+ },
+ {
+  "id": "SAP-UC-052",
+  "name": "Transport imported into production outside the approved change window",
+  "description": "Imports are the sanctioned way code and configuration reach production, so an import at an unapproved time is the sanctioned path being misused. The CTS logs carry the request, importer and return code.",
+  "domain": "ABAP Application",
+  "categories": [
+   "Transport & Change Management"
+  ],
+  "severity": "High",
+  "log_sources": [
+   "SAP Transport / CTS Logs (STMS, tp, ALOG / SLOG)"
+  ],
+  "sample_log": "2026-10-28T02:44:19Z sid=PRD action=IMPORT request=DEVK900871 client=100 user=TMSADM rc=0 tp_step=A log=/usr/sap/trans/log/ULOG26_4 msg=\"Import of request DEVK900871 (Workbench) ended with return code 0\"",
+  "detection": "CTS import events whose timestamp falls outside the change calendar, or whose request has no approved change record.",
+  "attack": [
+   "T1072 Software Deployment Tools",
+   "T1195.002 Compromise Software Supply Chain"
+  ]
+ },
+ {
+  "id": "SAP-UC-053",
+  "name": "Transport imported directly into production, skipping QA",
+  "description": "A request that appears in the production import log without a prior successful import in the quality system has bypassed testing and approval. Comparing per-system import history detects it reliably.",
+  "domain": "ABAP Application",
+  "categories": [
+   "Transport & Change Management"
+  ],
+  "severity": "Critical",
+  "log_sources": [
+   "SAP Transport / CTS Logs (STMS, tp, ALOG / SLOG)"
+  ],
+  "sample_log": "2026-10-28T03:02:51Z sid=PRD action=IMPORT request=DEVK900899 client=100 user=BASIS_OP1 rc=4 prior_import_QAS=none mode=unconditional_mode=1 msg=\"Import of request DEVK900899 with unconditional mode 1\"",
+  "detection": "Request present in PRD import log with no corresponding QAS import, or imported with unconditional modes (U1/U2) set.",
+  "attack": [
+   "T1072 Software Deployment Tools"
+  ]
+ },
+ {
+  "id": "SAP-UC-054",
+  "name": "Transport containing users, roles or security tables",
+  "description": "Transports can carry role definitions, profiles, authorization objects and table contents. A security-object transport is a code-reviewed path to privilege change and deserves separate scrutiny from functional changes.",
+  "domain": "ABAP Application",
+  "categories": [
+   "Transport & Change Management",
+   "Privilege Escalation & Authorization Abuse"
+  ],
+  "severity": "High",
+  "log_sources": [
+   "SAP Transport / CTS Logs (STMS, tp, ALOG / SLOG)"
+  ],
+  "sample_log": "2026-10-28T03:15:07Z sid=PRD action=IMPORT request=DEVK900901 client=100 user=TMSADM rc=0 objects=\"ACGR Z_FI_SUPER; SUSO S_DEVELOP; TABU USR02; TABU T000\" msg=\"Import completed\"",
+  "detection": "Parse transport object lists for types ACGR (roles), SUSO (auth objects), PROF, and TABU entries on security tables.",
+  "attack": [
+   "T1098 Account Manipulation",
+   "T1195.002 Compromise Software Supply Chain"
+  ]
+ },
+ {
+  "id": "SAP-UC-055",
+  "name": "tp or R3trans executed directly at operating system level",
+  "description": "Running tp or R3trans by hand on the host bypasses STMS, its approvals and its queue. It is the standard way to put an object into production with no transport trail inside SAP.",
+  "domain": "Infrastructure & Integration",
+  "categories": [
+   "Transport & Change Management",
+   "Audit & Log Tampering"
+  ],
+  "severity": "Critical",
+  "log_sources": [
+   "OS / Host Logs (syslog, auditd, Windows Event Log)",
+   "SAP Transport / CTS Logs (STMS, tp, ALOG / SLOG)"
+  ],
+  "sample_log": "Oct 28 03:28:44 sapprd01 audispd: type=EXECVE msg=audit(1793..): argc=5 a0=\"R3trans\" a1=\"-i\" a2=\"/tmp/.r3t_payload\" a3=\"-w\" a4=\"/tmp/.r3t.log\" uid=1001 auid=5012 user=prdadm",
+  "detection": "Host auditd/EXECVE for tp or R3trans invoked interactively (auid maps to a human, not the scheduler), and imports with no STMS queue entry.",
+  "attack": [
+   "T1072 Software Deployment Tools",
+   "T1070 Indicator Removal"
+  ]
+ },
+ {
+  "id": "SAP-UC-056",
+  "name": "Transport request released by its own author (no four-eyes)",
+  "description": "Release and import should involve more than one person. Where the creator, releaser and importer are the same identity, the entire change control is a single point of trust.",
+  "domain": "ABAP Application",
+  "categories": [
+   "Transport & Change Management",
+   "Fraud & Segregation of Duties"
+  ],
+  "severity": "Medium",
+  "log_sources": [
+   "SAP Transport / CTS Logs (STMS, tp, ALOG / SLOG)"
+  ],
+  "sample_log": "2026-10-28T03:40:12Z sid=DEV request=DEVK900912 as4user=C.WEBER action=RELEASE released_by=C.WEBER\n2026-10-28T03:52:30Z sid=PRD request=DEVK900912 action=IMPORT user=C.WEBER rc=0",
+  "detection": "E070.AS4USER (author) = releaser = importer for the same request.",
+  "attack": [
+   "T1072 Software Deployment Tools"
+  ]
+ },
+ {
+  "id": "SAP-UC-057",
+  "name": "Mass download of SAP data to a local file",
+  "description": "Security Audit Log message AUY records the byte count and target file for a list download. Large or repeated downloads from financial, HR or master-data transactions are the most common insider exfiltration pattern in SAP.",
+  "domain": "ABAP Application",
+  "categories": [
+   "Data Exfiltration"
+  ],
+  "severity": "High",
+  "log_sources": [
+   "SAP Security Audit Log (SM20 / RSAU_READ_LOG)"
+  ],
+  "sample_log": "2026-10-28T16:02:44Z host=sapprd01 sid=PRD client=100 user=K.VOGEL msgid=AUY class=Other sev=Severe tcode=SE16N prog=RK_SE16N msg=\"Download 48338112 bytes to file C:\\Users\\kvogel\\Desktop\\lfbk_full.xlsx\"",
+  "detection": "msgid=AUY: single download > 10 MB, or sum per user per day above a per-role baseline; weight by source transaction.",
+  "attack": [
+   "T1005 Data from Local System",
+   "T1048 Exfiltration Over Alternative Protocol"
+  ]
+ },
+ {
+  "id": "SAP-UC-058",
+  "name": "Large table read through SE16 / SE16N / SM30",
+  "description": "The generic table browsers read any table the user is authorized for, with no business context. A full read of a master-data or credential-bearing table is data staging regardless of intent.",
+  "domain": "ABAP Application",
+  "categories": [
+   "Data Exfiltration",
+   "Discovery & Reconnaissance"
+  ],
+  "severity": "High",
+  "log_sources": [
+   "SAP Security Audit Log (SM20 / RSAU_READ_LOG)",
+   "SAP Read Access Logging (RAL)"
+  ],
+  "sample_log": "2026-10-28T16:10:21Z host=sapprd01 sid=PRD client=100 user=K.VOGEL msgid=AU3 class=Transaction sev=Severe tcode=SE16N msg=\"Transaction SE16N started\"\n2026-10-28T16:11:08Z sid=PRD client=100 user=K.VOGEL tcode=SE16N table=KNBK rows_selected=24118 maxrows=0 export=XLSX msg=\"Generic table display executed\"",
+  "detection": "Table-browser executions where rows selected exceeds a threshold, or the table is on the sensitive list; always alert when combined with AUY.",
+  "attack": [
+   "T1213 Data from Information Repositories",
+   "T1005 Data from Local System"
+  ]
+ },
+ {
+  "id": "SAP-UC-059",
+  "name": "Read Access Logging spike on sensitive HR or PII fields",
+  "description": "RAL is the only SAP mechanism that records reads of specific fields. A sudden spike in a logged domain (salary, bank details, national IDs) by one user is a privacy incident whether or not data left the system.",
+  "domain": "ABAP Application",
+  "categories": [
+   "Data Exfiltration"
+  ],
+  "severity": "High",
+  "log_sources": [
+   "SAP Read Access Logging (RAL)"
+  ],
+  "sample_log": "2026-10-28T16:22:40Z sid=PRD client=100 user=HR_SUPPORT1 channel=DYNP tcode=PA20 log_domain=HR_SENSITIVE fields=\"PERNR,GBDAT,SSN,BANKN\" access_count=487 distinct_pernr=463 session=0000123456",
+  "detection": "RAL access_count or distinct business keys per user per hour above baseline; alert on any access by accounts outside the HR role family.",
+  "attack": [
+   "T1213 Data from Information Repositories",
+   "T1530 Data from Cloud Storage"
+  ]
+ },
+ {
+  "id": "SAP-UC-060",
+  "name": "Mass record extraction through an OData / Fiori service",
+  "description": "Fiori and third-party apps read SAP through OData. A single GET with $top removed, or a paged loop pulling an entire entity set, is bulk extraction over an interface that looks like ordinary user traffic.",
+  "domain": "ABAP Application",
+  "categories": [
+   "Data Exfiltration",
+   "RFC / Interface Abuse"
+  ],
+  "severity": "High",
+  "log_sources": [
+   "SAP Gateway / OData Logs (/IWFND/ERROR_LOG, /IWFND/TRACES)",
+   "SAP ICM / Web Dispatcher Access Log"
+  ],
+  "sample_log": "2026-10-28T16:35:09Z sid=PRD client=100 user=J.DOE service=ZHR_EMPLOYEE_SRV operation=GET entity=EmployeeSet query=\"$select=Pernr,Name,Iban&$top=100000\" http=200 records=84211 runtime_ms=61240 source_ip=10.14.22.87",
+  "detection": "Gateway/OData records where record count or response bytes exceed a per-service baseline, or $top is absent on a large entity set.",
+  "attack": [
+   "T1213 Data from Information Repositories",
+   "T1048 Exfiltration Over Alternative Protocol"
+  ]
+ },
+ {
+  "id": "SAP-UC-061",
+  "name": "Sensitive spool request created or accessed by a non-owner",
+  "description": "Spool requests hold rendered payroll, payment and customer reports. SP01 access to another user's spool, or a mass display/export of spool requests, is a quiet way to read reports without ever running them.",
+  "domain": "ABAP Application",
+  "categories": [
+   "Data Exfiltration"
+  ],
+  "severity": "Medium",
+  "log_sources": [
+   "SAP Spool Logs (TSP01 / SP01)",
+   "SAP Security Audit Log (SM20 / RSAU_READ_LOG)"
+  ],
+  "sample_log": "2026-10-28T16:48:33Z sid=PRD client=100 user=J.DOE tcode=SP01 spool_no=0000084412 owner=HR_PAYROLL title=\"Payroll register 10/2026\" action=DISPLAY pages=612 download=PDF",
+  "detection": "TSP01 access where accessing user != owner, or bulk access to > 10 spool requests in an hour.",
+  "attack": [
+   "T1005 Data from Local System"
+  ]
+ },
+ {
+  "id": "SAP-UC-062",
+  "name": "Payment file (DMEE) generated, downloaded or altered outside the payment run",
+  "description": "The payment medium file is the instruction the bank acts on. Generating or touching it outside the scheduled run, or downloading it to a workstation, is the final step of a payment fraud.",
+  "domain": "Business Process",
+  "categories": [
+   "Data Exfiltration",
+   "Fraud & Segregation of Duties"
+  ],
+  "severity": "Critical",
+  "log_sources": [
+   "SAP Security Audit Log (SM20 / RSAU_READ_LOG)",
+   "SAP Job Logs (TBTCO / TBTCP, SM37)",
+   "SAP Application Log (SLG1 / BAL)"
+  ],
+  "sample_log": "2026-10-28T17:02:19Z sid=PRD client=100 user=C.WEBER tcode=FDTA prog=RFFOEDI1 action=DOWNLOAD file=\"\\\\fileshare\\treasury\\PAYM_20261028.xml\" run_id=F110-20261028-01 items=142 total=EUR 4,318,220.00 scheduled_run=no",
+  "detection": "DMEE / FDTA / F110 medium access with no corresponding scheduled payment run, or any download of a payment file to a non-server path.",
+  "attack": [
+   "T1565 Data Manipulation",
+   "T1048 Exfiltration Over Alternative Protocol"
+  ]
+ },
+ {
+  "id": "SAP-UC-063",
+  "name": "Direct table update via SE16N debug-edit (&SAP_EDIT)",
+  "description": "Entering &SAP_EDIT in SE16N, or using the debugger to set the edit flag, allows direct writes to any table with no application logic, no change document and no validation. It is the clearest sign of deliberate data manipulation.",
+  "domain": "ABAP Application",
+  "categories": [
+   "Direct Data Manipulation",
+   "Fraud & Segregation of Duties"
+  ],
+  "severity": "Critical",
+  "log_sources": [
+   "SAP Security Audit Log (SM20 / RSAU_READ_LOG)",
+   "SAP Table Change Logs (DBTABLOG)"
+  ],
+  "sample_log": "2026-10-28T17:18:47Z host=sapprd01 sid=PRD client=100 user=C.WEBER msgid=AU3 class=Transaction sev=Severe tcode=SE16N msg=\"Transaction SE16N started\"\n2026-10-28T17:19:52Z sid=PRD client=100 user=C.WEBER tcode=SE16N cmd=&SAP_EDIT table=REGUH action=UPDATE key=100/2026/F110/0000142 field=ZBNKN value_old=1234567890 value_new=7788990011",
+  "detection": "SE16N with SAP_EDIT / UASE16N_START_VALUE, or DBTABLOG updates whose transaction code is a table browser rather than a business transaction.",
+  "attack": [
+   "T1565.001 Stored Data Manipulation"
+  ]
+ },
+ {
+  "id": "SAP-UC-064",
+  "name": "Change to a critical configuration or authorization table",
+  "description": "Tables such as T000 (clients), USR02 (logon data), TOBJ (auth objects), TACT/TACTZ (activities) and PRGN_CUST (security settings) underpin the control framework. Direct changes to them are control changes, not data changes.",
+  "domain": "ABAP Application",
+  "categories": [
+   "Direct Data Manipulation",
+   "Configuration & Hardening Drift"
+  ],
+  "severity": "Critical",
+  "log_sources": [
+   "SAP Table Change Logs (DBTABLOG)",
+   "SAP Security Audit Log (SM20 / RSAU_READ_LOG)"
+  ],
+  "sample_log": "2026-10-28T17:31:04Z tabname=PRGN_CUST key=REF_USER_CHECK field=VALUE value_old=E value_new= user=SEC_ADMIN tcode=SM30 chngind=U sid=PRD client=100",
+  "detection": "DBTABLOG on the critical-table list; requires rec/client and table logging to be switched on.",
+  "attack": [
+   "T1565.001 Stored Data Manipulation",
+   "T1562 Impair Defenses"
+  ]
+ },
+ {
+  "id": "SAP-UC-065",
+  "name": "Vendor bank account changed (LFBK)",
+  "description": "Redirecting a vendor's bank details and waiting for the next payment run is the highest-value SAP fraud, and it leaves a clean change document. Correlating the change with a subsequent payment to the same vendor closes the case.",
+  "domain": "Business Process",
+  "categories": [
+   "Fraud & Segregation of Duties",
+   "Direct Data Manipulation"
+  ],
+  "severity": "Critical",
+  "log_sources": [
+   "SAP Change Documents (CDHDR / CDPOS)"
+  ],
+  "sample_log": "2026-10-28T17:44:12Z objectclass=KRED objectid=0000104500 changenr=0000234567 username=C.WEBER udate=2026-10-28 utime=17:44:12 tcode=FK02 tabname=LFBK fname=BANKN value_old=1234567890 value_new=7788990011 chngind=U",
+  "detection": "CDPOS on LFBK (BANKN, BANKL, IBAN); escalate when a payment to the same LIFNR follows within 14 days, or when the changer also releases payments.",
+  "attack": [
+   "T1565.001 Stored Data Manipulation"
+  ]
+ },
+ {
+  "id": "SAP-UC-066",
+  "name": "Customer bank details or payment terms changed",
+  "description": "Changes to KNBK (bank data) and KNB1 payment terms shift money and credit exposure. Like vendor changes they are legitimate routinely, so the signal is who changed it and what followed.",
+  "domain": "Business Process",
+  "categories": [
+   "Fraud & Segregation of Duties",
+   "Direct Data Manipulation"
+  ],
+  "severity": "High",
+  "log_sources": [
+   "SAP Change Documents (CDHDR / CDPOS)"
+  ],
+  "sample_log": "2026-10-28T17:52:30Z objectclass=DEBI objectid=0000500871 changenr=0000234612 username=SD_SUPPORT udate=2026-10-28 utime=17:52:30 tcode=XD02 tabname=KNB1 fname=ZTERM value_old=NT30 value_new=NT180 chngind=U",
+  "detection": "CDPOS on KNBK / KNB1 (ZTERM, KLIMK) by users outside the master-data role, or where the same user also posts or clears invoices.",
+  "attack": [
+   "T1565.001 Stored Data Manipulation"
+  ]
+ },
+ {
+  "id": "SAP-UC-067",
+  "name": "Employee bank details or salary changed in HR master data",
+  "description": "Infotype 0008 (basic pay) and 0009 (bank details) drive payroll. A change to an employee's bank account shortly before a payroll run, especially by someone other than the HR owner, is payroll diversion.",
+  "domain": "Business Process",
+  "categories": [
+   "Fraud & Segregation of Duties",
+   "Direct Data Manipulation"
+  ],
+  "severity": "Critical",
+  "log_sources": [
+   "SAP Change Documents (CDHDR / CDPOS)",
+   "SAP Read Access Logging (RAL)"
+  ],
+  "sample_log": "2026-10-28T18:04:55Z objectclass=PERSONAL objectid=00847122 changenr=0000234699 username=HR_SUPPORT1 udate=2026-10-28 utime=18:04:55 tcode=PA30 infotype=0009 tabname=PA0009 fname=BANKN value_old=5566778899 value_new=7788990011 chngind=U",
+  "detection": "PA0009/PA0008 changes within N days of a payroll run, or made by a user who is not the employee's assigned HR administrator.",
+  "attack": [
+   "T1565.001 Stored Data Manipulation"
+  ]
+ },
+ {
+  "id": "SAP-UC-068",
+  "name": "Posting period reopened or document posted to a closed period",
+  "description": "Reopening periods in OB52 lets results be restated after close. The change and the postings that follow it belong in the same alert.",
+  "domain": "Business Process",
+  "categories": [
+   "Fraud & Segregation of Duties",
+   "Direct Data Manipulation"
+  ],
+  "severity": "High",
+  "log_sources": [
+   "SAP Change Documents (CDHDR / CDPOS)",
+   "SAP Security Audit Log (SM20 / RSAU_READ_LOG)"
+  ],
+  "sample_log": "2026-10-28T18:20:11Z tabname=T001B key=1000/+/0001 field=FRPE1 value_old=010 value_new=009 user=FI_CLOSE01 tcode=OB52 chngind=U sid=PRD client=100",
+  "detection": "T001B changes via OB52; then watch for BKPF postings with BUDAT in the reopened period by the same or a related user.",
+  "attack": [
+   "T1565.001 Stored Data Manipulation"
+  ]
+ },
+ {
+  "id": "SAP-UC-069",
+  "name": "Security Audit Log configuration changed or deactivated",
+  "description": "The audit log is the evidence base for almost every other use case here. Message AUE records changes to its own configuration, so an attacker turning filters off still writes one last record before the lights go out.",
+  "domain": "ABAP Application",
+  "categories": [
+   "Audit & Log Tampering"
+  ],
+  "severity": "Critical",
+  "log_sources": [
+   "SAP Security Audit Log (SM20 / RSAU_READ_LOG)"
+  ],
+  "sample_log": "2026-10-28T18:40:02Z host=sapprd01 sid=PRD client=100 user=BASIS_OP1 msgid=AUE class=System sev=Critical tcode=RSAU_CONFIG msg=\"Audit configuration changed: static profile SEC_PROD deactivated\"",
+  "detection": "Alert on every msgid=AUE and on tcode in (RSAU_CONFIG, SM19). Also alert when the audit event rate for a system drops to zero.",
+  "attack": [
+   "T1562.001 Disable or Modify Tools",
+   "T1070 Indicator Removal"
+  ]
+ },
+ {
+  "id": "SAP-UC-070",
+  "name": "Audit log event volume drops to zero for a system (log starvation)",
+  "description": "If the audit log is disabled at the profile level, or the forwarder breaks, the absence of events is the only signal left. A heartbeat detection catches both an attacker and a broken pipeline.",
+  "domain": "ABAP Application",
+  "categories": [
+   "Audit & Log Tampering"
+  ],
+  "severity": "High",
+  "log_sources": [
+   "SAP Security Audit Log (SM20 / RSAU_READ_LOG)",
+   "SAP System Log (SM21)"
+  ],
+  "sample_log": "# no events received from source\nsid=PRD host=sapprd01 last_event=2026-10-28T18:40:02Z expected_rate=~2400/h observed_rate=0/h window=60m status=SOURCE_SILENT",
+  "detection": "Per-source event-rate floor: alert when hourly count falls below a fraction of the 7-day baseline, or no event in 30 min for an active production system.",
+  "attack": [
+   "T1562.008 Disable or Modify Cloud Logs",
+   "T1562.001 Disable or Modify Tools"
+  ]
+ },
+ {
+  "id": "SAP-UC-071",
+  "name": "Audit log files deleted or truncated at operating system level",
+  "description": "The audit log is written to flat files under /usr/sap/<SID>/<inst>/log. Deleting or truncating them on the host destroys evidence without producing any SAP event at all, which is why host-level file auditing matters.",
+  "domain": "Infrastructure & Integration",
+  "categories": [
+   "Audit & Log Tampering"
+  ],
+  "severity": "Critical",
+  "log_sources": [
+   "OS / Host Logs (syslog, auditd, Windows Event Log)"
+  ],
+  "sample_log": "Oct 28 18:52:17 sapprd01 audispd: type=PATH msg=audit(1793..): item=0 name=\"/usr/sap/PRD/D00/log/audit_20261028\" nametype=DELETE\nOct 28 18:52:17 sapprd01 audispd: type=SYSCALL msg=audit(1793..): syscall=unlink exe=\"/usr/bin/rm\" auid=5012 uid=1001 comm=\"rm\" success=yes",
+  "detection": "auditd/FIM watch on the SAP log and work directories for unlink/truncate/rename by any identity other than the archiving job.",
+  "attack": [
+   "T1070 Indicator Removal",
+   "T1485 Data Destruction"
+  ]
+ },
+ {
+  "id": "SAP-UC-072",
+  "name": "Table change logging switched off (rec/client)",
+  "description": "rec/client decides whether DBTABLOG records table changes at all. Setting it to OFF, even briefly, creates a window in which direct table manipulation leaves no trace.",
+  "domain": "ABAP Application",
+  "categories": [
+   "Audit & Log Tampering",
+   "Configuration & Hardening Drift"
+  ],
+  "severity": "Critical",
+  "log_sources": [
+   "SAP Security Audit Log (SM20 / RSAU_READ_LOG)",
+   "SAP System Log (SM21)"
+  ],
+  "sample_log": "2026-10-28T19:01:44Z host=sapprd01 sid=PRD user=BASIS_OP1 tcode=RZ11 param=rec/client value_old=ALL value_new=OFF scope=dynamic msg=\"Profile parameter changed dynamically\"",
+  "detection": "Any change to rec/client, or to the log-data-changes flag on a technical settings record (SE13) for a logged table.",
+  "attack": [
+   "T1562.001 Disable or Modify Tools",
+   "T1070 Indicator Removal"
+  ]
+ },
+ {
+  "id": "SAP-UC-073",
+  "name": "Change documents or table change logs deleted",
+  "description": "Change documents (CDHDR/CDPOS) and DBTABLOG are purged by housekeeping reports. An unscheduled run of those reports, or a direct delete, removes the record of exactly the changes an investigation would look for.",
+  "domain": "ABAP Application",
+  "categories": [
+   "Audit & Log Tampering"
+  ],
+  "severity": "Critical",
+  "log_sources": [
+   "SAP Security Audit Log (SM20 / RSAU_READ_LOG)",
+   "SAP Job Logs (TBTCO / TBTCP, SM37)"
+  ],
+  "sample_log": "2026-10-28T19:12:08Z host=sapprd01 sid=PRD client=100 user=C.WEBER msgid=AUW class=Transaction sev=Severe prog=RSCDOK99 msg=\"Report RSCDOK99 started\"   # change document reorganisation, unscheduled\n2026-10-28T19:13:51Z sid=PRD client=100 user=C.WEBER prog=RSCDOK99 action=DELETE objectclass=KRED date_to=2026-10-28 records_deleted=18442",
+  "detection": "Execution of RSCDOK99 / RSTBPDEL / RSAU_* delete reports outside the housekeeping schedule, or by a non-basis account.",
+  "attack": [
+   "T1070 Indicator Removal",
+   "T1485 Data Destruction"
+  ]
+ },
+ {
+  "id": "SAP-UC-074",
+  "name": "System log (SM21) cleared or its retention shortened",
+  "description": "SM21 holds kernel and dispatcher events including dumps, failed logons at low level and instance restarts. Shortening its retention or wiping it hides infrastructure-level traces.",
+  "domain": "ABAP Application",
+  "categories": [
+   "Audit & Log Tampering"
+  ],
+  "severity": "High",
+  "log_sources": [
+   "SAP System Log (SM21)",
+   "OS / Host Logs (syslog, auditd, Windows Event Log)"
+  ],
+  "sample_log": "Oct 28 19:22:40 sapprd01 audispd: type=SYSCALL msg=audit(1793..): syscall=truncate exe=\"/usr/bin/truncate\" name=\"/usr/sap/PRD/D00/log/SLOG26\" auid=5012 comm=\"truncate\" success=yes",
+  "detection": "FIM on SLOG* files, plus changes to rslg/max_diskspace/local and rslg/collect_daemon parameters.",
+  "attack": [
+   "T1070 Indicator Removal"
+  ]
+ },
+ {
+  "id": "SAP-UC-075",
+  "name": "UCON or gateway security logging disabled",
+  "description": "gw/logging, gw/reg_no_conn_info and the UCON phase settings control whether interface misuse is recorded or blocked. Relaxing them is preparation for RFC abuse rather than an operational tuning step.",
+  "domain": "Infrastructure & Integration",
+  "categories": [
+   "Audit & Log Tampering",
+   "Configuration & Hardening Drift"
+  ],
+  "severity": "High",
+  "log_sources": [
+   "SAP Security Audit Log (SM20 / RSAU_READ_LOG)",
+   "SAP Gateway Log (gw_log / dev_rd)"
+  ],
+  "sample_log": "2026-10-28T19:31:16Z host=sapprd01 sid=PRD user=BASIS_OP1 tcode=RZ11 param=gw/reg_no_conn_info value_old=255 value_new=0 scope=dynamic msg=\"Gateway security relaxed: registration ACL checks reduced\"",
+  "detection": "Changes to gw/* security parameters, gw/logging, or a UCON phase moved from active back to logging/evaluation.",
+  "attack": [
+   "T1562 Impair Defenses"
+  ]
+ },
+ {
+  "id": "SAP-UC-076",
+  "name": "Logon as the HANA SYSTEM user",
+  "description": "SYSTEM is the HANA superuser and SAP's own guidance is to deactivate it after installation. Any authentication as SYSTEM in production is either an unmanaged break-glass action or a full database compromise.",
+  "domain": "HANA Database",
+  "categories": [
+   "Credential Access & Logon Abuse",
+   "Privilege Escalation & Authorization Abuse"
+  ],
+  "severity": "Critical",
+  "log_sources": [
+   "SAP HANA Audit Trail (AUDIT_LOG)"
+  ],
+  "sample_log": "2026-10-28T19:44:02.118Z host=saphana01 service=indexserver conn_id=401234 client_ip=203.0.113.45 user=SYSTEM app_user= policy=AUDIT_LOGON event_action=CONNECT event_status=SUCCESSFUL db=HDB msg=\"Successful connection as SYSTEM\"",
+  "detection": "HANA audit trail CONNECT events where user=SYSTEM, or any SUCCESSFUL authentication by a user flagged as deactivated.",
+  "attack": [
+   "T1078.001 Default Accounts",
+   "T1078 Valid Accounts"
+  ]
+ },
+ {
+  "id": "SAP-UC-077",
+  "name": "Grant of a powerful HANA system privilege",
+  "description": "DATA ADMIN, USER ADMIN, ROLE ADMIN, CATALOG READ, BACKUP ADMIN and TRUST ADMIN each confer control over the database or its security. Grants of them should be rare, named and ticketed.",
+  "domain": "HANA Database",
+  "categories": [
+   "Privilege Escalation & Authorization Abuse"
+  ],
+  "severity": "Critical",
+  "log_sources": [
+   "SAP HANA Audit Trail (AUDIT_LOG)"
+  ],
+  "sample_log": "2026-10-28T19:51:33.402Z host=saphana01 service=indexserver user=SYSTEM app_user=BASIS_OP1 client_ip=10.14.9.33 policy=SEC_PRIV_CHANGE event_action=GRANT PRIVILEGE event_status=SUCCESSFUL privilege=\"DATA ADMIN\" grantee=J_DOE grantor=SYSTEM stmt=\"GRANT DATA ADMIN TO J_DOE\"",
+  "detection": "event_action in (GRANT PRIVILEGE, GRANT ROLE) where privilege/role is on the powerful list, or grantee is a personal (non-service) account.",
+  "attack": [
+   "T1098 Account Manipulation",
+   "T1068 Exploitation for Privilege Escalation"
+  ]
+ },
+ {
+  "id": "SAP-UC-078",
+  "name": "Failed HANA authentication burst",
+  "description": "HANA is often reachable on 3xx15 from more of the network than it should be. A burst of failed connects, particularly for SYSTEM or SAP<SID>, is direct database password guessing.",
+  "domain": "HANA Database",
+  "categories": [
+   "Credential Access & Logon Abuse"
+  ],
+  "severity": "High",
+  "log_sources": [
+   "SAP HANA Audit Trail (AUDIT_LOG)"
+  ],
+  "sample_log": "2026-10-28T19:58:11.904Z host=saphana01 service=indexserver client_ip=203.0.113.45 user=SAPPRD policy=AUDIT_LOGON event_action=CONNECT event_status=UNSUCCESSFUL db=HDB msg=\"authentication failed\"\n2026-10-28T19:58:12.311Z host=saphana01 service=indexserver client_ip=203.0.113.45 user=SYSTEM policy=AUDIT_LOGON event_action=CONNECT event_status=UNSUCCESSFUL db=HDB msg=\"authentication failed\"",
+  "detection": "event_status=UNSUCCESSFUL CONNECT: >= 10 in 5 min per client_ip, or >= 5 distinct users per client_ip.",
+  "attack": [
+   "T1110 Brute Force"
+  ]
+ },
+ {
+  "id": "SAP-UC-079",
+  "name": "Direct access to the SAP schema bypassing the application layer",
+  "description": "All ABAP business data lives in the SAP<SID> schema. A query against it by anything other than the ABAP connection user means the entire application authorization layer has been side-stepped.",
+  "domain": "HANA Database",
+  "categories": [
+   "Data Exfiltration",
+   "Privilege Escalation & Authorization Abuse"
+  ],
+  "severity": "Critical",
+  "log_sources": [
+   "SAP HANA Audit Trail (AUDIT_LOG)"
+  ],
+  "sample_log": "2026-10-28T20:06:44.233Z host=saphana01 service=indexserver user=J_DOE app_user=J.DOE client_ip=10.14.22.87 policy=SEC_SENSITIVE_READ event_action=SELECT event_status=SUCCESSFUL schema=SAPPRD object=LFBK stmt=\"SELECT LIFNR, BANKL, BANKN FROM SAPPRD.LFBK\" rows=18442",
+  "detection": "Audit policy on the SAP<SID> schema for SELECT by any user other than the ABAP connect user; alert on row counts above a threshold.",
+  "attack": [
+   "T1213 Data from Information Repositories",
+   "T1005 Data from Local System"
+  ]
+ },
+ {
+  "id": "SAP-UC-080",
+  "name": "HANA audit policy disabled, dropped or altered",
+  "description": "The audit policy set is the HANA equivalent of the Security Audit Log configuration. Disabling global auditing or dropping a policy removes database-level visibility entirely.",
+  "domain": "HANA Database",
+  "categories": [
+   "Audit & Log Tampering"
+  ],
+  "severity": "Critical",
+  "log_sources": [
+   "SAP HANA Audit Trail (AUDIT_LOG)"
+  ],
+  "sample_log": "2026-10-28T20:14:29.118Z host=saphana01 service=indexserver user=SYSTEM app_user=BASIS_OP1 client_ip=10.14.9.33 policy=SEC_CONFIG_CHANGE event_action=ALTER SYSTEM event_status=SUCCESSFUL stmt=\"ALTER SYSTEM ALTER CONFIGURATION ('global.ini','SYSTEM') SET ('auditing configuration','global_auditing_state') = 'false'\"",
+  "detection": "Statements matching global_auditing_state, DROP AUDIT POLICY, or ALTER AUDIT POLICY ... DISABLE.",
+  "attack": [
+   "T1562.001 Disable or Modify Tools",
+   "T1562.008 Disable or Modify Cloud Logs"
+  ]
+ },
+ {
+  "id": "SAP-UC-081",
+  "name": "HANA backup deleted or backup catalog modified",
+  "description": "Destroying backups is the step that turns an intrusion into an extortion event. The backup catalog records both the deletion and who issued it.",
+  "domain": "HANA Database",
+  "categories": [
+   "Destruction & Availability Impact"
+  ],
+  "severity": "Critical",
+  "log_sources": [
+   "SAP HANA Audit Trail (AUDIT_LOG)",
+   "SAP HANA Backup Catalog / indexserver Trace"
+  ],
+  "sample_log": "2026-10-28T20:22:51.660Z host=saphana01 service=indexserver user=BACKUP_OP app_user=J.DOE policy=SEC_BACKUP event_action=BACKUP CATALOG DELETE event_status=SUCCESSFUL stmt=\"BACKUP CATALOG DELETE ALL BEFORE BACKUP_ID 1793000000000 COMPLETE\" backups_removed=42",
+  "detection": "BACKUP CATALOG DELETE / BACKUP DELETE statements, and backup file removal at the filesystem level outside the retention job.",
+  "attack": [
+   "T1490 Inhibit System Recovery",
+   "T1485 Data Destruction"
+  ]
+ },
+ {
+  "id": "SAP-UC-082",
+  "name": "SQL injection pattern in a HANA statement",
+  "description": "Where custom XSA, ABAP native SQL or a reporting layer concatenates input into SQL, the injected payload appears in the audited statement string. Pattern-matching the statement text catches attempts that the application never noticed.",
+  "domain": "HANA Database",
+  "categories": [
+   "Direct Data Manipulation",
+   "Discovery & Reconnaissance"
+  ],
+  "severity": "High",
+  "log_sources": [
+   "SAP HANA Audit Trail (AUDIT_LOG)"
+  ],
+  "sample_log": "2026-10-28T20:31:07.441Z host=saphana01 service=xsengine user=XSA_APP app_user=anonymous client_ip=203.0.113.45 policy=SEC_SENSITIVE_READ event_action=SELECT event_status=SUCCESSFUL stmt=\"SELECT * FROM SAPPRD.KNA1 WHERE KUNNR = '1' OR '1'='1' UNION ALL SELECT USER_NAME, PASSWORD_CHANGE_TIME FROM SYS.USERS--'\"",
+  "detection": "Statement strings matching UNION ALL SELECT, OR '1'='1', ';--', or references to SYS.USERS / SYS.CREDENTIALS from an application user.",
+  "attack": [
+   "T1190 Exploit Public-Facing Application",
+   "T1213 Data from Information Repositories"
+  ]
+ },
+ {
+  "id": "SAP-UC-083",
+  "name": "HANA user created or granted a role outside provisioning",
+  "description": "Database users created locally in HANA sit outside the SAP identity process and outside most access reviews, which makes them durable persistence.",
+  "domain": "HANA Database",
+  "categories": [
+   "User & Role Administration",
+   "Privilege Escalation & Authorization Abuse"
+  ],
+  "severity": "High",
+  "log_sources": [
+   "SAP HANA Audit Trail (AUDIT_LOG)"
+  ],
+  "sample_log": "2026-10-28T20:38:19.027Z host=saphana01 service=indexserver user=SYSTEM app_user=BASIS_OP1 policy=SEC_USER_ADMIN event_action=CREATE USER event_status=SUCCESSFUL stmt=\"CREATE USER SVC_REPORT PASSWORD *** NO FORCE_FIRST_PASSWORD_CHANGE\" grantee=SVC_REPORT",
+  "detection": "event_action in (CREATE USER, ALTER USER, GRANT ROLE) with no matching provisioning record; flag NO FORCE_FIRST_PASSWORD_CHANGE and non-expiring passwords.",
+  "attack": [
+   "T1136 Create Account",
+   "T1098 Account Manipulation"
+  ]
+ },
+ {
+  "id": "SAP-UC-084",
+  "name": "BTP subaccount or global account administrator role granted",
+  "description": "Subaccount Administrator in BTP is equivalent to owning everything deployed in that subaccount, including destinations and their stored credentials. The audit log service records the assignment with actor and target.",
+  "domain": "BTP & Cloud",
+  "categories": [
+   "Privilege Escalation & Authorization Abuse",
+   "User & Role Administration"
+  ],
+  "severity": "Critical",
+  "log_sources": [
+   "SAP BTP Audit Log Service"
+  ],
+  "sample_log": "{\"time\":\"2026-10-28T20:50:11.233Z\",\"category\":\"audit.security-events\",\"format_version\":\"2.0\",\"tenant\":\"a1b2c3d4-prd\",\"user\":\"j.doe@corp.com\",\"ip\":\"203.0.113.45\",\"message\":{\"type\":\"role-collection-assignment\",\"role_collection\":\"Subaccount Administrator\",\"target_user\":\"svc_integration@corp.com\",\"result\":\"success\"}}",
+  "detection": "BTP audit records of type role-collection-assignment where the role collection is administrative, or the target is a technical user.",
+  "attack": [
+   "T1098.003 Additional Cloud Roles",
+   "T1078.004 Cloud Accounts"
+  ]
+ },
+ {
+  "id": "SAP-UC-085",
+  "name": "BTP destination created or its credentials changed",
+  "description": "Destinations hold the URLs and credentials BTP applications use to reach on-premise SAP and third parties. Changing one redirects a trusted integration; reading one yields a credential.",
+  "domain": "BTP & Cloud",
+  "categories": [
+   "RFC / Interface Abuse",
+   "Data Exfiltration"
+  ],
+  "severity": "Critical",
+  "log_sources": [
+   "SAP BTP Audit Log Service"
+  ],
+  "sample_log": "{\"time\":\"2026-10-28T20:57:44.108Z\",\"category\":\"audit.configuration-change\",\"tenant\":\"a1b2c3d4-prd\",\"user\":\"svc_integration@corp.com\",\"ip\":\"10.44.2.19\",\"message\":{\"type\":\"destination\",\"name\":\"PRD_ERP_RFC\",\"action\":\"update\",\"attributes\":[{\"name\":\"URL\",\"old\":\"https://erp.corp.internal\",\"new\":\"https://collector.203-0-113-45.sslip.io\"},{\"name\":\"Password\",\"old\":\"***\",\"new\":\"***\"}]}}",
+  "detection": "audit.configuration-change on destinations; alert when the URL host leaves the approved domain list or a credential attribute changes.",
+  "attack": [
+   "T1041 Exfiltration Over C2 Channel",
+   "T1552 Unsecured Credentials"
+  ]
+ },
+ {
+  "id": "SAP-UC-086",
+  "name": "Long-lived BTP service key or client secret created",
+  "description": "Service keys and X.509/secret bindings are bearer credentials that often outlive the person who made them. Creation events are the only point at which they can be governed.",
+  "domain": "BTP & Cloud",
+  "categories": [
+   "Privilege Escalation & Authorization Abuse",
+   "Credential Access & Logon Abuse"
+  ],
+  "severity": "High",
+  "log_sources": [
+   "SAP BTP Audit Log Service"
+  ],
+  "sample_log": "{\"time\":\"2026-10-28T21:04:02.771Z\",\"category\":\"audit.security-events\",\"tenant\":\"a1b2c3d4-prd\",\"user\":\"j.doe@corp.com\",\"message\":{\"type\":\"service-binding-key\",\"service\":\"xsuaa\",\"instance\":\"prd-uaa\",\"action\":\"create\",\"key_name\":\"ci-pipeline-key\",\"expires\":\"never\"}}",
+  "detection": "Service key / binding creation where expiry is unset, or the creating identity is not a platform-operations account.",
+  "attack": [
+   "T1528 Steal Application Access Token",
+   "T1098.001 Additional Cloud Credentials"
+  ]
+ },
+ {
+  "id": "SAP-UC-087",
+  "name": "Failed authentication burst against SAP Cloud Identity (IAS)",
+  "description": "IAS fronts Fiori, SuccessFactors and BTP logons. Password spraying there is cheap, internet-facing and the usual first step toward an SAP cloud account takeover.",
+  "domain": "BTP & Cloud",
+  "categories": [
+   "Credential Access & Logon Abuse"
+  ],
+  "severity": "High",
+  "log_sources": [
+   "SAP Cloud Identity Services (IAS) Audit Log"
+  ],
+  "sample_log": "{\"time\":\"2026-10-28T21:11:19.500Z\",\"eventType\":\"UserAuthenticationFailed\",\"tenant\":\"corp-ias\",\"userId\":\"j.doe@corp.com\",\"applicationName\":\"S4HANA Fiori PRD\",\"sourceIp\":\"203.0.113.45\",\"userAgent\":\"Mozilla/5.0\",\"reason\":\"INVALID_CREDENTIALS\"}",
+  "detection": "UserAuthenticationFailed: >= 10 per sourceIp in 5 min, or >= 5 distinct userIds per sourceIp; alert on any success that follows.",
+  "attack": [
+   "T1110.003 Password Spraying",
+   "T1078.004 Cloud Accounts"
+  ]
+ },
+ {
+  "id": "SAP-UC-088",
+  "name": "Multi-factor authentication disabled or reset for an IAS user",
+  "description": "Turning MFA off, or resetting a user's second factor and re-enrolling it, is the standard way an attacker makes stolen credentials usable and keeps them usable.",
+  "domain": "BTP & Cloud",
+  "categories": [
+   "Credential Access & Logon Abuse",
+   "Audit & Log Tampering"
+  ],
+  "severity": "Critical",
+  "log_sources": [
+   "SAP Cloud Identity Services (IAS) Audit Log"
+  ],
+  "sample_log": "{\"time\":\"2026-10-28T21:18:33.212Z\",\"eventType\":\"UserMfaConfigurationChanged\",\"tenant\":\"corp-ias\",\"adminUser\":\"admin@corp.com\",\"targetUser\":\"cfo@corp.com\",\"change\":{\"attribute\":\"totp\",\"old\":\"ENABLED\",\"new\":\"DISABLED\"},\"sourceIp\":\"203.0.113.45\"}",
+  "detection": "MFA configuration change events; escalate when target is a privileged or executive account, or when a logon by the target follows within an hour.",
+  "attack": [
+   "T1556.006 Multi-Factor Authentication",
+   "T1621 Multi-Factor Authentication Request Generation"
+  ]
+ },
+ {
+  "id": "SAP-UC-089",
+  "name": "Cloud Integration (CPI) iFlow or credential changed",
+  "description": "CPI moves business documents between SAP and partners. Changing a deployed iFlow or a stored credential alters or redirects live transaction flows, and the audit log is the only record.",
+  "domain": "BTP & Cloud",
+  "categories": [
+   "Transport & Change Management",
+   "RFC / Interface Abuse"
+  ],
+  "severity": "High",
+  "log_sources": [
+   "SAP Integration Suite (CPI) Audit Log"
+  ],
+  "sample_log": "{\"time\":\"2026-10-28T21:25:41.339Z\",\"category\":\"audit.configuration-change\",\"tenant\":\"corp-cpi-prd\",\"user\":\"integration.dev@corp.com\",\"message\":{\"type\":\"credential\",\"name\":\"SF_HCM_BASIC\",\"action\":\"update\"}}\n{\"time\":\"2026-10-28T21:26:10.004Z\",\"category\":\"audit.configuration-change\",\"tenant\":\"corp-cpi-prd\",\"user\":\"integration.dev@corp.com\",\"message\":{\"type\":\"integration-flow\",\"name\":\"IF_PAYMENT_TO_BANK\",\"action\":\"deploy\",\"version\":\"1.4.0\"}}",
+  "detection": "CPI configuration-change events on credentials, keystores or payment-relevant iFlows outside a change window.",
+  "attack": [
+   "T1195.002 Compromise Software Supply Chain",
+   "T1552 Unsecured Credentials"
+  ]
+ },
+ {
+  "id": "SAP-UC-090",
+  "name": "Mass employee data export from SuccessFactors",
+  "description": "SuccessFactors holds the full workforce record. Ad-hoc report exports and OData pulls of the employee entity are the main bulk-PII egress path in SAP HCM cloud.",
+  "domain": "BTP & Cloud",
+  "categories": [
+   "Data Exfiltration"
+  ],
+  "severity": "High",
+  "log_sources": [
+   "SAP SuccessFactors Audit Log"
+  ],
+  "sample_log": "{\"time\":\"2026-10-28T21:33:08.550Z\",\"eventType\":\"AdHocReportExport\",\"tenant\":\"corpPRD\",\"user\":\"hr.analyst@corp.com\",\"reportName\":\"All Employees - Full Detail\",\"entities\":[\"PerPersonal\",\"PerEmail\",\"PerNationalId\",\"EmpPayCompRecurring\"],\"recordCount\":84211,\"format\":\"CSV\",\"sourceIp\":\"203.0.113.45\"}",
+  "detection": "Report export or OData calls where recordCount exceeds a per-user baseline, or sensitive entities (NationalId, PayComp, Bank) are included.",
+  "attack": [
+   "T1213 Data from Information Repositories",
+   "T1048 Exfiltration Over Alternative Protocol"
+  ]
+ },
+ {
+  "id": "SAP-UC-091",
+  "name": "Supplier bank details changed in Ariba",
+  "description": "The vendor bank-change fraud has moved upstream into supplier self-service portals. A change made through Ariba that then flows into ERP bypasses the ERP-side approval entirely.",
+  "domain": "BTP & Cloud",
+  "categories": [
+   "Fraud & Segregation of Duties",
+   "Direct Data Manipulation"
+  ],
+  "severity": "Critical",
+  "log_sources": [
+   "SAP Ariba Audit Log"
+  ],
+  "sample_log": "{\"time\":\"2026-10-28T21:41:22.900Z\",\"realm\":\"corp-prd\",\"eventType\":\"SupplierBankAccountChanged\",\"supplierId\":\"SUP-104500\",\"supplierName\":\"Nordwind Logistik GmbH\",\"changedBy\":\"portal:supplier-admin@nordwind.example\",\"field\":\"IBAN\",\"old\":\"DE02120300000000202051\",\"new\":\"LT121000011101001000\",\"approvalWorkflow\":\"auto-approved\",\"sourceIp\":\"203.0.113.45\"}",
+  "detection": "Supplier bank-detail changes, especially auto-approved ones, changes to a different country/IBAN prefix, or changes shortly before an invoice release.",
+  "attack": [
+   "T1565.001 Stored Data Manipulation"
+  ]
+ },
+ {
+  "id": "SAP-UC-092",
+  "name": "Same user created a vendor and released a payment to it (SoD violation)",
+  "description": "Vendor creation and payment release must sit with different people. Where the audit trail shows one identity on both sides of a payment, the control has failed regardless of whether money moved.",
+  "domain": "Business Process",
+  "categories": [
+   "Fraud & Segregation of Duties"
+  ],
+  "severity": "Critical",
+  "log_sources": [
+   "SAP Change Documents (CDHDR / CDPOS)",
+   "SAP Security Audit Log (SM20 / RSAU_READ_LOG)"
+  ],
+  "sample_log": "2026-10-28T21:50:04Z objectclass=KRED objectid=0000104999 changenr=0000234810 username=C.WEBER tcode=FK01 action=CREATE name=\"Helios Trading Ltd\"\n2026-10-28T21:58:37Z sid=PRD client=100 user=C.WEBER tcode=F110 run_id=F110-20261028-02 action=PAYMENT_RUN_RELEASE lifnr=0000104999 amount=EUR 94,800.00 bank=LT121000011101001000",
+  "detection": "Join vendor-create change documents (CDHDR objectclass=KRED, tcode FK01/XK01) with F110 / FBZP release events on the same LIFNR by the same user.",
+  "attack": [
+   "T1565 Data Manipulation"
+  ]
+ },
+ {
+  "id": "SAP-UC-093",
+  "name": "Payment released to a vendor whose bank details changed recently",
+  "description": "This is the completion of the bank-change fraud. Neither event alone is unusual; the sequence within a short window is the alert that matters.",
+  "domain": "Business Process",
+  "categories": [
+   "Fraud & Segregation of Duties"
+  ],
+  "severity": "Critical",
+  "log_sources": [
+   "SAP Change Documents (CDHDR / CDPOS)"
+  ],
+  "sample_log": "2026-10-28T17:44:12Z objectclass=KRED objectid=0000104500 changenr=0000234567 username=C.WEBER tcode=FK02 tabname=LFBK fname=BANKN value_old=1234567890 value_new=7788990011\n2026-10-29T02:10:55Z sid=PRD client=100 user=FI_PAYRUN tcode=F110 run_id=F110-20261029-01 lifnr=0000104500 amount=EUR 318,420.00 bank=7788990011 status=PAID",
+  "detection": "Payment to a LIFNR where a LFBK change exists within the preceding 14 days; rank by amount.",
+  "attack": [
+   "T1565.001 Stored Data Manipulation"
+  ]
+ },
+ {
+  "id": "SAP-UC-094",
+  "name": "Goods receipt and invoice posted by the same user",
+  "description": "Three-way match depends on receipt and invoice being independent. One identity doing both allows payment for goods never delivered.",
+  "domain": "Business Process",
+  "categories": [
+   "Fraud & Segregation of Duties"
+  ],
+  "severity": "High",
+  "log_sources": [
+   "SAP Change Documents (CDHDR / CDPOS)",
+   "SAP Application Log (SLG1 / BAL)"
+  ],
+  "sample_log": "2026-10-29T08:14:22Z sid=PRD client=100 user=MM_CLERK1 tcode=MIGO action=GOODS_RECEIPT ebeln=4500018842 mblnr=5000234119 amount=EUR 62,000.00\n2026-10-29T08:21:40Z sid=PRD client=100 user=MM_CLERK1 tcode=MIRO action=INVOICE_POST ebeln=4500018842 belnr=5105001882 amount=EUR 62,000.00",
+  "detection": "Same user on MIGO and MIRO for one purchase order, within the same period.",
+  "attack": [
+   "T1565 Data Manipulation"
+  ]
+ },
+ {
+  "id": "SAP-UC-095",
+  "name": "Purchase order created and released by the same user",
+  "description": "Release strategies exist so that a requisition is approved by someone other than its author. Self-release, or a PO split to stay under a release threshold, defeats it.",
+  "domain": "Business Process",
+  "categories": [
+   "Fraud & Segregation of Duties"
+  ],
+  "severity": "High",
+  "log_sources": [
+   "SAP Change Documents (CDHDR / CDPOS)"
+  ],
+  "sample_log": "2026-10-29T08:35:11Z sid=PRD client=100 user=MM_CLERK1 tcode=ME21N action=PO_CREATE ebeln=4500018850 net_value=EUR 24,900.00 release_group=01\n2026-10-29T08:36:02Z sid=PRD client=100 user=MM_CLERK1 tcode=ME29N action=PO_RELEASE ebeln=4500018850 release_code=R1",
+  "detection": "Same user on ME21N/ME22N and ME28/ME29N for one EBELN; also flag repeated POs just below a release threshold to the same vendor.",
+  "attack": [
+   "T1565 Data Manipulation"
+  ]
+ },
+ {
+  "id": "SAP-UC-096",
+  "name": "Journal entry posted outside business hours by a privileged user",
+  "description": "Manual postings at night, by an account that also holds configuration or basis rights, are the classic financial-statement manipulation pattern that external audit asks about.",
+  "domain": "Business Process",
+  "categories": [
+   "Fraud & Segregation of Duties"
+  ],
+  "severity": "Medium",
+  "log_sources": [
+   "SAP Change Documents (CDHDR / CDPOS)",
+   "SAP Security Audit Log (SM20 / RSAU_READ_LOG)"
+  ],
+  "sample_log": "2026-10-29T03:12:44Z sid=PRD client=100 user=FI_POWER01 tcode=FB01 belnr=0100087712 bukrs=1000 blart=SA budat=2026-09-30 amount=EUR 1,240,000.00 posting_hour=03 user_has_sap_all=true",
+  "detection": "BKPF postings where posting time is outside business hours AND user holds critical authorizations, or BUDAT is in a prior period.",
+  "attack": [
+   "T1565 Data Manipulation"
+  ]
+ },
+ {
+  "id": "SAP-UC-097",
+  "name": "One-time vendor account reused across multiple payments",
+  "description": "One-time (CPD) vendor accounts carry bank details on the document rather than the master record, so they escape master-data controls. Repeated use of a CPD account is a deliberate route around them.",
+  "domain": "Business Process",
+  "categories": [
+   "Fraud & Segregation of Duties"
+  ],
+  "severity": "High",
+  "log_sources": [
+   "SAP Change Documents (CDHDR / CDPOS)"
+  ],
+  "sample_log": "2026-10-29T09:02:18Z sid=PRD client=100 user=FI_CLERK2 tcode=FB60 belnr=1900042118 lifnr=CPD00001 name1=\"Ad-hoc Services\" bank=LT121000011101001000 amount=EUR 48,200.00  # 7th use of this IBAN in 30 days",
+  "detection": "Count distinct documents per CPD account or per document-level IBAN over 30 days; alert above a small threshold.",
+  "attack": [
+   "T1565 Data Manipulation"
+  ]
+ },
+ {
+  "id": "SAP-UC-098",
+  "name": "Customer credit limit raised then large order released",
+  "description": "Raising a credit limit and immediately releasing a blocked order converts a credit control into a loss. Both events are routine alone.",
+  "domain": "Business Process",
+  "categories": [
+   "Fraud & Segregation of Duties"
+  ],
+  "severity": "Medium",
+  "log_sources": [
+   "SAP Change Documents (CDHDR / CDPOS)"
+  ],
+  "sample_log": "2026-10-29T09:20:33Z objectclass=DEBI objectid=0000500871 changenr=0000234922 username=SD_SUPPORT tcode=FD32 tabname=KNKK fname=KLIMK value_old=50000 value_new=2000000 chngind=U\n2026-10-29T09:24:02Z sid=PRD client=100 user=SD_SUPPORT tcode=VKM3 vbeln=0000884412 action=CREDIT_RELEASE net_value=EUR 1,850,000.00",
+  "detection": "KNKK.KLIMK increase followed by a credit release (VKM3/VKM1) on the same customer by the same user within 24 h.",
+  "attack": [
+   "T1565 Data Manipulation"
+  ]
+ },
+ {
+  "id": "SAP-UC-099",
+  "name": "Mass deletion of business or configuration data",
+  "description": "A high-volume delete against business tables, whether through a Z-program, a table browser or native SQL, is either a serious operational error or destructive action. Rate is the detection, not intent.",
+  "domain": "ABAP Application",
+  "categories": [
+   "Destruction & Availability Impact",
+   "Direct Data Manipulation"
+  ],
+  "severity": "Critical",
+  "log_sources": [
+   "SAP Table Change Logs (DBTABLOG)",
+   "SAP HANA Audit Trail (AUDIT_LOG)"
+  ],
+  "sample_log": "2026-10-29T09:40:02Z sid=PRD client=100 user=C.WEBER prog=Z_CLEANUP_UTIL table=BKPF action=DELETE rows_deleted=184422 duration_s=612 commit=implicit",
+  "detection": "Delete volume per table per hour above baseline; any DELETE on BKPF/BSEG/MSEG/LFA1/KNA1 outside archiving jobs.",
+  "attack": [
+   "T1485 Data Destruction",
+   "T1489 Service Stop"
+  ]
+ },
+ {
+  "id": "SAP-UC-100",
+  "name": "SAP instance or service stopped outside a maintenance window",
+  "description": "An unplanned instance stop is either an outage or an attacker clearing sessions, breaking log forwarding or preparing for host-level work. Message AUH records it from the application side.",
+  "domain": "ABAP Application",
+  "categories": [
+   "Destruction & Availability Impact"
+  ],
+  "severity": "High",
+  "log_sources": [
+   "SAP Security Audit Log (SM20 / RSAU_READ_LOG)",
+   "SAP System Log (SM21)",
+   "OS / Host Logs (syslog, auditd, Windows Event Log)"
+  ],
+  "sample_log": "2026-10-29T09:52:11Z host=sapprd01 sid=PRD inst=D00 msgid=AUH class=System sev=Severe msg=\"Application server sapprd01_PRD_00 stopped\"\nOct 29 09:52:10 sapprd01 systemd: SAP PRD instance D00: stopping (initiated by uid=1001 prdadm, auid=5012)",
+  "detection": "msgid in (AUG,AUH) outside the maintenance calendar, correlated with host-level stopsap/systemd events and the invoking human identity.",
+  "attack": [
+   "T1489 Service Stop"
+  ]
+ },
+ {
+  "id": "SAP-UC-101",
+  "name": "Client copy, client reset or client deletion (SCC5 / SCCL)",
+  "description": "SCC5 deletes a client; SCCL overwrites one. Executed against production these destroy or overwrite the live dataset, and the transaction is rarely needed outside a project.",
+  "domain": "ABAP Application",
+  "categories": [
+   "Destruction & Availability Impact"
+  ],
+  "severity": "Critical",
+  "log_sources": [
+   "SAP Security Audit Log (SM20 / RSAU_READ_LOG)",
+   "SAP System Log (SM21)"
+  ],
+  "sample_log": "2026-10-29T10:02:44Z host=sapprd01 sid=PRD client=100 user=BASIS_OP1 msgid=AU3 class=Transaction sev=Severe tcode=SCC5 msg=\"Transaction SCC5 started\"\n2026-10-29T10:04:19Z sid=PRD user=BASIS_OP1 prog=SCC5_DELETE_CLIENT target_client=100 scope=\"client-specific data + user master\" status=STARTED",
+  "detection": "tcode in (SCC5,SCCL,SCC9,SCC8) on a production SID. Treat as critical regardless of outcome.",
+  "attack": [
+   "T1485 Data Destruction",
+   "T1490 Inhibit System Recovery"
+  ]
+ },
+ {
+  "id": "SAP-UC-102",
+  "name": "Ransomware indicators on SAP file systems",
+  "description": "SAP data, executable and transport directories are high-value ransomware targets. Rapid rename or rewrite activity across /sapmnt, /usr/sap/trans or the HANA data volume is encryption in progress.",
+  "domain": "Infrastructure & Integration",
+  "categories": [
+   "Destruction & Availability Impact"
+  ],
+  "severity": "Critical",
+  "log_sources": [
+   "OS / Host Logs (syslog, auditd, Windows Event Log)"
+  ],
+  "sample_log": "Oct 29 10:14:02 sapprd01 audispd: type=SYSCALL msg=audit(1793..): syscall=rename exe=\"/tmp/.sysupd\" comm=\".sysupd\" auid=5012 success=yes\nOct 29 10:14:02 sapprd01 audispd: type=PATH name=\"/usr/sap/trans/data/R900871.DEV\" nametype=DELETE\nOct 29 10:14:02 sapprd01 audispd: type=PATH name=\"/usr/sap/trans/data/R900871.DEV.locked\" nametype=CREATE",
+  "detection": "FIM: high-rate rename/create with new extensions under /sapmnt, /usr/sap, /hana/data; correlate with instance crashes and backup deletions.",
+  "attack": [
+   "T1486 Data Encrypted for Impact",
+   "T1490 Inhibit System Recovery"
+  ]
+ },
+ {
+  "id": "SAP-UC-103",
+  "name": "Secure Network Communication disabled, exposing SAP traffic in clear text",
+  "description": "With SNC off, DIAG and RFC traffic including credentials crosses the network unencrypted. Turning it off is a prerequisite for credential interception and a regression of a baseline control.",
+  "domain": "Infrastructure & Integration",
+  "categories": [
+   "Configuration & Hardening Drift",
+   "Credential Access & Logon Abuse"
+  ],
+  "severity": "High",
+  "log_sources": [
+   "SAP Security Audit Log (SM20 / RSAU_READ_LOG)",
+   "SAP System Log (SM21)"
+  ],
+  "sample_log": "2026-10-29T10:25:41Z host=sapprd01 sid=PRD user=BASIS_OP1 tcode=RZ10 param=snc/enable value_old=1 value_new=0 scope=profile restart_required=yes msg=\"Profile parameter changed\"",
+  "detection": "Changes to snc/* parameters, or to icm/server_port_* dropping from HTTPS to HTTP.",
+  "attack": [
+   "T1562 Impair Defenses",
+   "T1040 Network Sniffing"
+  ]
+ },
+ {
+  "id": "SAP-UC-104",
+  "name": "SAP kernel or security patch level downgraded",
+  "description": "A kernel downgrade restores known vulnerabilities and is occasionally used to re-open an exploited path. Patch level is cheap to baseline and monitor per host.",
+  "domain": "Infrastructure & Integration",
+  "categories": [
+   "Configuration & Hardening Drift"
+  ],
+  "severity": "High",
+  "log_sources": [
+   "SAP System Log (SM21)",
+   "OS / Host Logs (syslog, auditd, Windows Event Log)"
+  ],
+  "sample_log": "2026-10-29T10:36:08Z host=sapprd01 sid=PRD component=kernel value_old=\"753 patch 1200\" value_new=\"753 patch 900\" changed_by=prdadm msg=\"Instance restarted with downgraded kernel patch level\"",
+  "detection": "Compare reported kernel/patch level per host against the previous value; alert on any decrease.",
+  "attack": [
+   "T1562 Impair Defenses",
+   "T1211 Exploitation for Defense Evasion"
+  ]
+ },
+ {
+  "id": "SAP-UC-105",
+  "name": "Web Dispatcher or ICM serving an administration or diagnostic path externally",
+  "description": "Paths such as /sap/admin, /sap/public/icman, /sap/bc/ping and the Web Dispatcher admin handler should never be reachable from an untrusted network. External requests against them are reconnaissance of the web tier.",
+  "domain": "Infrastructure & Integration",
+  "categories": [
+   "Discovery & Reconnaissance",
+   "Configuration & Hardening Drift"
+  ],
+  "severity": "High",
+  "log_sources": [
+   "SAP ICM / Web Dispatcher Access Log"
+  ],
+  "sample_log": "203.0.113.45 - - [29/Oct/2026:10:45:02 +0000] \"GET /sap/wdisp/admin/public/default.html HTTP/1.1\" 401 1120 \"-\" \"curl/8.5.0\"\n203.0.113.45 - - [29/Oct/2026:10:45:03 +0000] \"GET /sap/public/info HTTP/1.1\" 200 2418 \"-\" \"curl/8.5.0\"\n203.0.113.45 - - [29/Oct/2026:10:45:05 +0000] \"GET /sap/bc/soap/wsdl11 HTTP/1.1\" 403 512 \"-\" \"curl/8.5.0\"",
+  "detection": "ICM/Web Dispatcher access log where path matches the admin/diagnostic list AND source is external; a 200 on /sap/public/info is itself a finding.",
+  "attack": [
+   "T1190 Exploit Public-Facing Application",
+   "T1595 Active Scanning"
+  ]
+ },
+ {
+  "id": "SAP-UC-106",
+  "name": "Fiori launchpad session used from a changing source address",
+  "description": "A single authenticated SAP session whose requests arrive from two different networks indicates a stolen session cookie or token replay rather than a roaming user.",
+  "domain": "ABAP Application",
+  "categories": [
+   "Credential Access & Logon Abuse",
+   "Data Exfiltration"
+  ],
+  "severity": "High",
+  "log_sources": [
+   "SAP ICM / Web Dispatcher Access Log",
+   "SAP Gateway / OData Logs (/IWFND/ERROR_LOG, /IWFND/TRACES)"
+  ],
+  "sample_log": "2026-10-29T10:55:11Z sid=PRD client=100 user=J.DOE session=SID%3aANON%3asapprd01_PRD_00%3a7f2a source_ip=10.14.22.87 path=/sap/bc/ui2/flp\n2026-10-29T10:55:48Z sid=PRD client=100 user=J.DOE session=SID%3aANON%3asapprd01_PRD_00%3a7f2a source_ip=203.0.113.45 path=/sap/opu/odata/sap/ZFI_PAYMENT_SRV/PaymentSet",
+  "detection": "Same SAP session/security token observed from more than one source IP or ASN inside the session lifetime.",
+  "attack": [
+   "T1550.004 Web Session Cookie",
+   "T1539 Steal Web Session Cookie"
+  ]
+ },
+ {
+  "id": "SAP-UC-107",
+  "name": "PI/PO payment interface channel failure or credential error",
+  "description": "The integration layer carries payment and banking traffic. Authentication failures or a channel stopped and restarted on a payment interface are both an availability event and a possible tamper attempt.",
+  "domain": "Infrastructure & Integration",
+  "categories": [
+   "RFC / Interface Abuse",
+   "Fraud & Segregation of Duties"
+  ],
+  "severity": "High",
+  "log_sources": [
+   "SAP PI / PO Message & Audit Log"
+  ],
+  "sample_log": "2026-10-29T11:04:41Z system=PO_PRD msgid=4f2a8c11-... sender=FI_PAYMENT_OUT receiver=BANK_SFTP_IN channel=CC_PAYMENT_SFTP adapter=SFTP status=ERROR user=PIISUSER severity=ERROR text=\"Authentication failed for user treasury_prd - host key mismatch for sftp.bank.example\"",
+  "detection": "PI/PO channel errors on payment interfaces, host-key mismatches, and manual channel stop/start outside a change window.",
+  "attack": [
+   "T1557 Adversary-in-the-Middle",
+   "T1565 Data Manipulation"
+  ]
+ },
+ {
+  "id": "SAP-UC-108",
+  "name": "Unapproved OS-level logon to an SAP host as <sid>adm or the database user",
+  "description": "sidadm and the database OS user can read the secure store, edit profiles and delete logs. Interactive logons by them bypass every application-layer control in this library.",
+  "domain": "Infrastructure & Integration",
+  "categories": [
+   "Credential Access & Logon Abuse",
+   "Privilege Escalation & Authorization Abuse"
+  ],
+  "severity": "High",
+  "log_sources": [
+   "OS / Host Logs (syslog, auditd, Windows Event Log)"
+  ],
+  "sample_log": "Oct 29 11:14:02 sapprd01 sshd[44120]: Accepted publickey for prdadm from 203.0.113.45 port 51992 ssh2: RSA SHA256:9f2a...\nOct 29 11:14:03 sapprd01 su: pam_unix(su:session): session opened for user prdadm by jdoe(uid=5012)",
+  "detection": "Interactive sessions for <sid>adm / sapadm / hdbadm, especially via direct SSH rather than su from a named account, and from outside the jump hosts.",
+  "attack": [
+   "T1078 Valid Accounts",
+   "T1021.004 SSH"
+  ]
+ },
+ {
+  "id": "SAP-UC-109",
+  "name": "SAP secure store (SSFS / rsecssfs) files read or copied",
+  "description": "The secure store holds the database connect credentials and RFC destination passwords. Reading those files is a credential theft with no application-layer footprint at all.",
+  "domain": "Infrastructure & Integration",
+  "categories": [
+   "Credential Access & Logon Abuse",
+   "Data Exfiltration"
+  ],
+  "severity": "Critical",
+  "log_sources": [
+   "OS / Host Logs (syslog, auditd, Windows Event Log)"
+  ],
+  "sample_log": "Oct 29 11:22:18 sapprd01 audispd: type=SYSCALL msg=audit(1793..): syscall=openat exe=\"/usr/bin/scp\" comm=\"scp\" auid=5012 success=yes\nOct 29 11:22:18 sapprd01 audispd: type=PATH name=\"/sapmnt/PRD/global/security/rsecssfs/data/SSFS_PRD.DAT\" nametype=NORMAL",
+  "detection": "auditd watch on rsecssfs data and key directories for any access by a process other than the SAP kernel binaries.",
+  "attack": [
+   "T1552.001 Credentials In Files",
+   "T1555 Credentials from Password Stores"
+  ]
+ },
+ {
+  "id": "SAP-UC-110",
+  "name": "Enumeration of SAP users or authorizations (SUIM / USR tables)",
+  "description": "Before escalating, an attacker needs to know which accounts hold which roles. SUIM reports and reads of USR02 / AGR_USERS are the SAP form of account and permission discovery.",
+  "domain": "ABAP Application",
+  "categories": [
+   "Discovery & Reconnaissance",
+   "Privilege Escalation & Authorization Abuse"
+  ],
+  "severity": "Medium",
+  "log_sources": [
+   "SAP Security Audit Log (SM20 / RSAU_READ_LOG)",
+   "SAP Read Access Logging (RAL)"
+  ],
+  "sample_log": "2026-10-29T11:33:02Z host=sapprd01 sid=PRD client=100 user=J.DOE msgid=AU3 class=Transaction sev=Severe tcode=SUIM msg=\"Transaction SUIM started\"\n2026-10-29T11:34:44Z sid=PRD client=100 user=J.DOE tcode=SUIM report=RSUSR002 selection=\"Profile = SAP_ALL\" rows_returned=11",
+  "detection": "SUIM/RSUSR* execution by non-security accounts, or table reads of USR02, AGR_USERS, AGR_1251 via SE16/RFC_READ_TABLE.",
+  "attack": [
+   "T1087 Account Discovery",
+   "T1069 Permission Groups Discovery"
+  ]
+ },
+ {
+  "id": "SAP-UC-111",
+  "name": "SAP system information disclosed to an unauthenticated caller",
+  "description": "/sap/public/info and similar endpoints return SID, kernel release, client list and database details without authentication. That output is what an attacker uses to select an exploit.",
+  "domain": "Infrastructure & Integration",
+  "categories": [
+   "Discovery & Reconnaissance"
+  ],
+  "severity": "Medium",
+  "log_sources": [
+   "SAP ICM / Web Dispatcher Access Log"
+  ],
+  "sample_log": "203.0.113.45 - - [29/Oct/2026:11:40:02 +0000] \"GET /sap/public/info HTTP/1.1\" 200 2418 \"-\" \"python-requests/2.31.0\"\n# response: <rfcproto>011</rfcproto><rfcchartyp>4103</rfcchartyp><rfcdest>PRD_00</rfcdest><rfckernrl>753</rfckernrl>",
+  "detection": "HTTP 200 on /sap/public/info, /sap/public/icman, /sap/bc/ping from external sources; should be blocked at the Web Dispatcher.",
+  "attack": [
+   "T1595 Active Scanning",
+   "T1592 Gather Victim Host Information"
+  ]
+ }
+]
